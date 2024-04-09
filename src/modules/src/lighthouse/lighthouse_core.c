@@ -35,7 +35,9 @@
 
 #include "system.h"
 #include "param.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 // Uncomment next line to add extra debug log variables
 // #define CONFIG_DEBUG_LOG_ENABLE 1

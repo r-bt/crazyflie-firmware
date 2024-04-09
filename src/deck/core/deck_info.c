@@ -37,7 +37,9 @@
 #include "debug.h"
 #include "static_mem.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifdef CONFIG_DEBUG
   #define DECK_INFO_DBG_PRINT(fmt, ...)  DEBUG_PRINT(fmt, ## __VA_ARGS__)

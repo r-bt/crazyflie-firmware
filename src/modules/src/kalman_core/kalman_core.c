@@ -57,7 +57,9 @@
 
 #include "kalman_core.h"
 #include "cfassert.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #include "physicalConstants.h"
 

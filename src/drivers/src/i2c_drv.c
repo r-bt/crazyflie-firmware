@@ -49,7 +49,9 @@
 #include "nvicconf.h"
 #include "sleepus.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 //DEBUG
 #ifdef I2CDRV_DEBUG_LOG_EVENTS

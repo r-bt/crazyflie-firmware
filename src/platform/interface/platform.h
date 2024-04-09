@@ -27,9 +27,14 @@
 #define PLATFORM_H_
 
 #include <stdbool.h>
-#include "motors.h"
 
+#ifndef CONFIG_PLATFORM_SITL
+#include "motors.h"
+#endif
+
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #define PLATFORM_DEVICE_TYPE_STRING_MAX_LEN (32 + 1)
 #define PLATFORM_DEVICE_TYPE_MAX_LEN (4 + 1)
@@ -51,6 +56,10 @@ typedef enum {
   SensorImplementation_bosch,
   #endif
 
+  #ifdef CONFIG_SENSORS_SITL
+  SensorImplementation_sitl,
+  #endif
+
   SensorImplementation_COUNT,
 } SensorImplementation_t;
 
@@ -59,7 +68,9 @@ typedef struct {
   char deviceTypeName[30];
   SensorImplementation_t sensorImplementation;
   bool physicalLayoutAntennasAreClose;
+  #ifndef CONFIG_SENSORS_SITL
   const MotorPerifDef** motorMap;
+  #endif
 } platformConfig_t;
 
 /**
@@ -84,6 +95,8 @@ const char* platformConfigGetDeviceType();
 const char* platformConfigGetDeviceTypeName();
 SensorImplementation_t platformConfigGetSensorImplementation();
 bool platformConfigPhysicalLayoutAntennasAreClose();
+#ifndef CONFIG_PLATFORM_SITL
 const MotorPerifDef** platformConfigGetMotorMapping();
+#endif
 
 #endif /* PLATFORM_H_ */

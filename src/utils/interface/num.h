@@ -29,6 +29,10 @@
 
 #include <stdint.h>
 
+#ifdef CONFIG_PLATFORM_SITL
+#include <math.h>
+#endif
+
 uint16_t single2half(float number);
 float half2single(uint16_t number);
 

@@ -7,6 +7,7 @@ bin/*
 .pydevproject
 .settings/*
 .vscode/*
+cache/*
 *~
 cflie.*
 version.c
@@ -39,6 +40,7 @@ docs/api/log_param_doc.json
 docs/api
 
 build/
+sitl_make/build/*
 # To avoid that /tools/build is ignored
 !/tools/*
 

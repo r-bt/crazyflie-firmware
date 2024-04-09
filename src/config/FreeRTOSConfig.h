@@ -71,7 +71,11 @@
  *----------------------------------------------------------*/
 
 #define configUSE_PREEMPTION		1
+#ifndef CONFIG_PLATFORM_SITL
 #define configUSE_IDLE_HOOK			1
+#else
+#define configUSE_IDLE_HOOK     0
+#endif   
 #define configUSE_TICK_HOOK			0
 #define configCPU_CLOCK_HZ			( ( unsigned long ) FREERTOS_MCU_CLOCK_HZ )
 #define configTICK_RATE_HZ_RAW  1000
@@ -82,7 +86,11 @@
 #define configUSE_16_BIT_TICKS		0
 #define configIDLE_SHOULD_YIELD		0
 #define configUSE_CO_ROUTINES 		0
+#ifdef DEBUG
 #define configCHECK_FOR_STACK_OVERFLOW      1
+#else
+#define configCHECK_FOR_STACK_OVERFLOW      0
+#endif
 #define configUSE_TASK_NOTIFICATIONS 1
 #define configUSE_TIMERS          1
 #define configTIMER_TASK_PRIORITY 1
@@ -146,7 +154,20 @@ to exclude the API function. */
 #define TASK_PM_ID_NBR          5
 #define TASK_PROXIMITY_ID_NBR   6
 
+#ifndef CONFIG_PLATFORM_SITL
 #define configASSERT( x )  if( ( x ) == 0 ) assertFail(#x, __FILE__, __LINE__ )
+#else
+#define configUSE_TRACE_FACILITY    1
+#define configASSERT( x ) if( ( x ) == 0 ) vAssertCalled( __LINE__, __FILE__ )
+/* Include the FreeRTOS+Trace FreeRTOS trace macro definitions. */
+#define TRACE_ENTER_CRITICAL_SECTION() portENTER_CRITICAL()
+#define TRACE_EXIT_CRITICAL_SECTION() portEXIT_CRITICAL()
+/*Need to explicitely redefine vAssertCalled*/
+extern void vAssertCalled( unsigned long ulLine, const char * const pcFileName );
+/* Hack for undefined vApplicationMallocFailedHook */
+extern void vApplicationMallocFailedHook(void);
+/*#include "trcKernelPort.h" */
+#endif
 
 /*
 #define traceTASK_SWITCHED_IN() \

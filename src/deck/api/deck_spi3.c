@@ -34,7 +34,9 @@
 #include "FreeRTOS.h"
 #include "semphr.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "cfassert.h"
 #include "config.h"
 #include "nvicconf.h"

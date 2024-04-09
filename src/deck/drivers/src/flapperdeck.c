@@ -37,7 +37,9 @@
 #include "extrx.h"
 #include "flapperdeck.h"
 #include "pm.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "config.h"
 
 static float reading_last = 0.0;

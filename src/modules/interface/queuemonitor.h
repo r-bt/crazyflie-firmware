@@ -29,7 +29,9 @@
 
 
 #include "FreeRTOS.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifdef CONFIG_DEBUG_QUEUE_MONITOR
   #include "queue.h"

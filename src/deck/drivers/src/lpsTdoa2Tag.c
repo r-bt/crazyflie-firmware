@@ -28,7 +28,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "log.h"
 #include "param.h"
 #include "lpsTdoa2Tag.h"

@@ -38,13 +38,17 @@
 #include "stabilizer.h"
 #include "configblock.h"
 #include "worker.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifdef CONFIG_DECK_LIGHTHOUSE
 #include "lighthouse_storage.h"
 #endif
 
+#ifdef CONFIG_DECK_LOCO
 #include "locodeck.h"
+#endif
 
 #include "estimator.h"
 #include "quatcompress.h"

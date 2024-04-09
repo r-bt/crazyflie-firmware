@@ -37,41 +37,45 @@
 #include "config.h"
 #include "param.h"
 #include "log.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "ledseq.h"
 #include "pm.h"
+#endif
 
 #include "system.h"
 #include "platform.h"
 #include "storage.h"
 #include "configblock.h"
 #include "worker.h"
-#include "freeRTOSdebug.h"
-#include "uart_syslink.h"
-#include "uart1.h"
-#include "uart2.h"
 #include "comm.h"
 #include "stabilizer.h"
 #include "commander.h"
 #include "console.h"
-#include "usblink.h"
 #include "mem.h"
 #include "crtp_mem.h"
-#include "proximity.h"
-#include "watchdog.h"
 #include "queuemonitor.h"
 #include "buzzer.h"
-#include "sound.h"
 #include "sysload.h"
 #include "estimator_kalman.h"
 #include "estimator_ukf.h"
-#include "deck.h"
-#include "extrx.h"
 #include "app.h"
 #include "static_mem.h"
 #include "peer_localization.h"
+#ifndef CONFIG_PLATFORM_SITL
+#include "freeRTOSdebug.h"
+#include "uart_syslink.h"
+#include "uart1.h"
+#include "uart2.h"
+#include "usblink.h"
+#include "proximity.h"
+#include "watchdog.h"
+#include "sound.h"
+#include "deck.h"
+#include "extrx.h"
 #include "cfassert.h"
 #include "i2cdev.h"
 #include "autoconf.h"
+#endif
 #include "vcp_esc_passthrough.h"
 #if CONFIG_ENABLE_CPX
   #include "cpxlink.h"
@@ -110,7 +114,11 @@ void systemInit(void)
   canStartMutex = xSemaphoreCreateMutexStatic(&canStartMutexBuffer);
   xSemaphoreTake(canStartMutex, portMAX_DELAY);
 
+  #ifdef CONFIG_PLATFORM_SITL
+  socketlinkInit();
+  #else
   usblinkInit();
+  #endif
   sysLoadInit();
 #if CONFIG_ENABLE_CPX
   cpxlinkInit();
@@ -130,18 +138,22 @@ void systemInit(void)
     DEBUG_PRINT("Build %s:%s (%s) %s\n", V_SLOCAL_REVISION,
                 V_SREVISION, V_STAG, (V_MODIFIED)?"MODIFIED":"CLEAN");
   }
+  #ifndef CONFIG_PLATFORM_SITL
   DEBUG_PRINT("I am 0x%08X%08X%08X and I have %dKB of flash!\n",
               *((int*)(MCU_ID_ADDRESS+8)), *((int*)(MCU_ID_ADDRESS+4)),
               *((int*)(MCU_ID_ADDRESS+0)), *((short*)(MCU_FLASH_SIZE_ADDRESS)));
+  #endif
 
   configblockInit();
-  storageInit();
   workerInit();
+  buzzerInit();
+  #ifndef CONFIG_PLATFORM_SITL
+  storageInit();
   adcInit();
   ledseqInit();
   pmInit();
-  buzzerInit();
   peerLocalizationInit();
+  #endif
 
 #ifdef CONFIG_APP_ENABLE
   appInit();
@@ -153,9 +165,10 @@ void systemInit(void)
 bool systemTest()
 {
   bool pass=isInit;
-
+  #ifndef CONFIG_PLATFORM_SITL
   pass &= ledseqTest();
   pass &= pmTest();
+  #endif
   pass &= workerTest();
   pass &= buzzerTest();
   return pass;
@@ -166,9 +179,10 @@ bool systemTest()
 void systemTask(void *arg)
 {
   bool pass = true;
-
+  #ifndef CONFIG_PLATFORM_SITL
   ledInit();
   ledSet(CHG_LED, 1);
+  #endif
 
 #ifdef CONFIG_DEBUG_QUEUE_MONITOR
   queueMonitorInit();
@@ -177,11 +191,12 @@ void systemTask(void *arg)
 #ifdef CONFIG_DEBUG_PRINT_ON_UART1
   uart1Init(CONFIG_DEBUG_PRINT_ON_UART1_BAUDRATE);
 #endif
-
+  #ifndef CONFIG_PLATFORM_SITL
   usecTimerInit();
   i2cdevInit(I2C3_DEV);
   i2cdevInit(I2C1_DEV);
   passthroughInit();
+  #endif
 
   //Init the high-levels modules
   systemInit();
@@ -200,24 +215,31 @@ void systemTask(void *arg)
 
   // Enabling incoming syslink messages to be added to the queue.
   // This should probably be done later, but deckInit() takes a long time if this is done later.
+  #ifndef CONFIG_PLATFORM_SITL
   uartslkEnableIncoming();
+  #endif
 
   memInit();
+  #ifndef CONFIG_PLATFORM_SITL
   deckInit();
   estimator = deckGetRequiredEstimator();
+  #endif
   stabilizerInit(estimator);
+  #ifndef CONFIG_PLATFORM_SITL
   if (deckGetRequiredLowInterferenceRadioMode() && platformConfigPhysicalLayoutAntennasAreClose())
   {
     platformSetLowInterferenceRadioMode();
   }
   soundInit();
+  #endif
   crtpMemInit();
 
 #ifdef PROXIMITY_ENABLED
   proximityInit();
 #endif
-
+  #ifndef CONFIG_PLATFORM_SITL
   systemRequestNRFVersion();
+  #endif
 
   //Test the modules
   DEBUG_PRINT("About to run tests in system.c.\n");
@@ -229,10 +251,12 @@ void systemTask(void *arg)
     pass = false;
     DEBUG_PRINT("configblock [FAIL]\n");
   }
+  #ifndef CONFIG_PLATFORM_SITL
   if (storageTest() == false) {
     pass = false;
     DEBUG_PRINT("storage [FAIL]\n");
   }
+  #endif
   if (commTest() == false) {
     pass = false;
     DEBUG_PRINT("comm [FAIL]\n");
@@ -259,7 +283,7 @@ void systemTask(void *arg)
     DEBUG_PRINT("estimatorUKFTask [FAIL]\n");
   }
   #endif
-
+  #ifndef CONFIG_PLATFORM_SITL
   if (deckTest() == false) {
     pass = false;
     DEBUG_PRINT("deck [FAIL]\n");
@@ -268,6 +292,7 @@ void systemTask(void *arg)
     pass = false;
     DEBUG_PRINT("sound [FAIL]\n");
   }
+  #endif
   if (memTest() == false) {
     pass = false;
     DEBUG_PRINT("mem [FAIL]\n");
@@ -276,6 +301,7 @@ void systemTask(void *arg)
     pass = false;
     DEBUG_PRINT("CRTP mem [FAIL]\n");
   }
+  #ifndef CONFIG_PLATFORM_SITL
   if (watchdogNormalStartTest() == false) {
     pass = false;
     DEBUG_PRINT("watchdogNormalStart [FAIL]\n");
@@ -288,6 +314,7 @@ void systemTask(void *arg)
     pass = false;
     DEBUG_PRINT("peerLocalization [FAIL]\n");
   }
+  #endif
 
   //Start the firmware
   if(pass)
@@ -295,9 +322,11 @@ void systemTask(void *arg)
     DEBUG_PRINT("Self test passed!\n");
     selftestPassed = 1;
     systemStart();
+    #ifndef CONFIG_PLATFORM_SITL
     soundSetEffect(SND_STARTUP);
     ledseqRun(&seq_alive);
     ledseqRun(&seq_testPassed);
+    #endif
   }
   else
   {
@@ -306,7 +335,9 @@ void systemTask(void *arg)
     {
       while(1)
       {
+        #ifndef CONFIG_PLATFORM_SITL
         ledseqRun(&seq_testFailed);
+        #endif
         vTaskDelay(M2T(2000));
         // System can be forced to start by setting the param to 1 from the cfclient
         if (selftestPassed)
@@ -319,12 +350,15 @@ void systemTask(void *arg)
     }
     else
     {
+      #ifndef CONFIG_PLATFORM_SITL
       ledInit();
       ledSet(SYS_LED, true);
+      #endif
     }
   }
+  #ifndef CONFIG_PLATFORM_SITL
   DEBUG_PRINT("Free heap: %d bytes\n", xPortGetFreeHeapSize());
-
+  #endif
   workerLoop();
 
   //Should never reach this point!
@@ -337,8 +371,10 @@ void systemTask(void *arg)
 void systemStart()
 {
   xSemaphoreGive(canStartMutex);
+#ifndef CONFIG_PLATFORM_SITL
 #ifndef DEBUG
   watchdogInit();
+#endif
 #endif
 }
 
@@ -353,6 +389,7 @@ void systemWaitStart(void)
   xSemaphoreGive(canStartMutex);
 }
 
+#ifndef CONFIG_PLATFORM_SITL
 void systemRequestShutdown()
 {
   SyslinkPacket slp;
@@ -364,11 +401,13 @@ void systemRequestShutdown()
 
 void systemRequestNRFVersion()
 {
+  
   SyslinkPacket slp;
 
   slp.type = SYSLINK_SYS_NRF_VERSION;
   slp.length = 0;
   syslinkSendPacket(&slp);
+  
 }
 
 void systemSyslinkReceive(SyslinkPacket *slp)
@@ -408,6 +447,7 @@ void vApplicationIdleHook( void )
   { __asm volatile ("wfi"); }
 #endif
 }
+#endif
 
 static void doAssertCallback(void) {
   if (doAssert) {
@@ -415,6 +455,7 @@ static void doAssertCallback(void) {
   }
 }
 
+#ifndef CONFIG_PLATFORM_SITL
 /**
  * This parameter group contain read-only parameters pertaining to the CPU
  * in the Crazyflie.
@@ -444,6 +485,7 @@ PARAM_ADD_CORE(PARAM_UINT32 | PARAM_RONLY, id1, MCU_ID_ADDRESS+4)
 PARAM_ADD_CORE(PARAM_UINT32 | PARAM_RONLY, id2, MCU_ID_ADDRESS+8)
 
 PARAM_GROUP_STOP(cpu)
+#endif
 
 PARAM_GROUP_START(system)
 

@@ -33,10 +33,14 @@
 #include "crtpservice.h"
 #include "param_task.h"
 #include "log.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "eskylink.h"
 #include "uart_syslink.h"
 #include "radiolink.h"
 #include "usblink.h"
+#else
+#include "socketlink.h"
+#endif
 #include "platformservice.h"
 #include "syslink.h"
 #include "crtp_localization_service.h"
@@ -48,15 +52,21 @@ void commInit(void)
   if (isInit)
     return;
 
+  #ifndef CONFIG_PLATFORM_SITL
   uartslkInit();
   radiolinkInit();
+  #endif
 
   /* These functions are moved to be initialized early so
    * that DEBUG_PRINT can be used early */
   // crtpInit();
   // consoleInit();
 
+  #ifndef CONFIG_PLATFORM_SITL
   crtpSetLink(radiolinkGetLink());
+  #else
+  crtpSetLink(socketlinkGetLink());
+  #endif
 
   crtpserviceInit();
   platformserviceInit();
@@ -78,7 +88,9 @@ bool commTest(void)
 {
   bool pass=isInit;
   
+  #ifndef CONFIG_PLATFORM_SITL
   pass &= radiolinkTest();
+  #endif
   pass &= crtpTest();
   pass &= crtpserviceTest();
   pass &= platformserviceTest();

@@ -36,7 +36,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "config.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 /* ST includes */
 #include "stm32fxxx.h"
 

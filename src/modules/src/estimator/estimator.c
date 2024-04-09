@@ -1,4 +1,6 @@
+#ifndef CONFIG_PLATFORM_SITL
 #include "stm32fxxx.h"
+#endif
 #include "FreeRTOS.h"
 #include "queue.h"
 #include "static_mem.h"
@@ -175,7 +177,11 @@ void estimatorEnqueue(const measurement_t *measurement) {
   }
 
   portBASE_TYPE result;
+  #ifndef CONFIG_PLATFORM_SITL
   bool isInInterrupt = (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) != 0;
+  #else
+  bool isInInterrupt = false;
+  #endif
   if (isInInterrupt) {
     portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
     result = xQueueSendFromISR(measurementsQueue, measurement, &xHigherPriorityTaskWoken);

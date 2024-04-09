@@ -27,7 +27,9 @@
 
 #include <stdbool.h>
 #include "eprintf.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #define UART2_DATA_TIMEOUT_MS    1000
 #define UART2_DATA_TIMEOUT_TICKS (UART2_DATA_TIMEOUT_MS / portTICK_RATE_MS)

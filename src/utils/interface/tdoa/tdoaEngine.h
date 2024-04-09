@@ -3,7 +3,9 @@
 
 #include "tdoaStorage.h"
 #include "tdoaStats.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #if CONFIG_DECK_LOCO_LONGER_RANGE
 #define TDOA_ENGINE_MEASUREMENT_NOISE_STD 0.30f

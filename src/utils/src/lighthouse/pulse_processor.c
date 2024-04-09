@@ -30,7 +30,9 @@
 #include "pulse_processor_v1.h"
 #include "pulse_processor_v2.h"
 #include "cf_math.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 
 /**

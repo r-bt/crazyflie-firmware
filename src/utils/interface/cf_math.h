@@ -27,6 +27,7 @@
 
 // Include "arm_math.h". This header generates some warnings, especially in
 // unit tests. We hide them to avoid noise.
+#ifndef CONFIG_PLATFORM_SITL
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
@@ -34,7 +35,12 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include "arm_math.h"
 #pragma GCC diagnostic pop
-
+#else
+#include "FreeRTOSConfig.h"
+#include "math.h"
+#include "lapack.h"
+#include "cblas.h"
+#endif
 #include "cfassert.h"
 
 
@@ -55,6 +61,7 @@
     _a > _b ? _a : _b;      \
   })
 
+#ifndef CONFIG_PLATFORM_SITL
 // Matrix data must be aligned on 4 byte bundaries
 static inline void assert_aligned_4_bytes(const arm_matrix_instance_f32* matrix) {
   const uint32_t address = (uint32_t)matrix->pData;
@@ -93,6 +100,113 @@ static inline float arm_sqrt(float32_t in) {
   return pOut;
 }
 
+static inline void mat_scale(const arm_matrix_instance_f32 * pSrcA, float32_t scale, arm_matrix_instance_f32 * pDst) {
+  arm_status result = arm_mat_scale_f32(pSrcA, scale, pDst);
+  ASSERT(ARM_MATH_SUCCESS == result);
+}
+
+#else
+
+#include <string.h>
+
+#define PI                            3.1415926f
+#define arm_matrix_instance_f32       Matrixf
+#define arm_sqrt(x)                   sqrtf(x)
+#define arm_sqrt_f32(x)               sqrtf(x)
+#define arm_cos_f32(x)                cosf(x)
+#define arm_sin_f32(x)                sinf(x)
+
+typedef float float32_t;
+
+typedef struct{
+  uint16_t numRows;
+  uint16_t numCols;
+  float *pData;
+} Matrixf; 
+
+
+static inline void mat_trans(const arm_matrix_instance_f32 * pSrc, arm_matrix_instance_f32 * pDst)
+{ 
+  bool is_valid = (pSrc->numRows == pDst->numCols) && (pSrc->numCols == pDst->numRows);
+  configASSERT(is_valid);
+  uint8_t i,j;
+  for (i=0 ; i< pSrc->numRows; i++){
+    for(j=0 ; j< pSrc->numCols; j++){
+      pDst->pData[j * pDst->numCols + i] = pSrc->pData[i*pSrc->numCols + j];
+    }
+  } 
+}
+/*static inline void mat_inv(const arm_matrix_instance_f32 * pSrc, arm_matrix_instance_f32 * pDst)
+{ 
+  configASSERT(ARM_MATH_SUCCESS == arm_mat_inverse_f32(pSrc, pDst)); 
+}*/
+static inline void mat_inv(const arm_matrix_instance_f32 * pSrc, arm_matrix_instance_f32 * pDst)
+{
+  bool is_valid = pSrc->numRows == pSrc->numCols;
+  configASSERT(is_valid);
+  pDst->numRows = pSrc->numRows;
+  pDst->numCols = pSrc->numCols;
+  memcpy(pDst->pData,pSrc->pData,pSrc->numRows*pSrc->numCols*sizeof(float));
+
+  int N = pSrc->numRows;
+  int *IPIV = malloc(pSrc->numRows*sizeof(int));
+  int LWORK = pSrc->numRows * pSrc->numCols;
+  float *WORK = malloc(LWORK*sizeof(float));
+  int INFO;
+
+  // Invert matrix using LAPACK
+  sgetrf_(&N, &N, pDst->pData, &N, IPIV, &INFO);
+  sgetri_(&N, pDst->pData, &N, IPIV, WORK, &LWORK, &INFO);
+
+  free(IPIV);
+  free(WORK);
+}
+
+// static inline void mat_mult(const arm_matrix_instance_f32 * pSrcA, const arm_matrix_instance_f32 * pSrcB, arm_matrix_instance_f32 * pDst)
+// { 
+//   bool is_valid = (pSrcA->numCols == pSrcB->numRows) && (pSrcA->numRows == pDst->numRows) && (pSrcB->numCols == pDst->numCols);
+//   configASSERT(is_valid);
+//   uint8_t i,j,k;
+//   for(i=0; i< pDst->numRows ; i++){
+//     for(j=0; j<pDst->numCols ; j++){
+//       pDst->pData[j+ i*pDst->numCols] = 0.0f;
+//     }
+//   }
+//   for(i=0; i< pDst->numRows ; i++){
+//     for(j=0; j<pDst->numCols ; j++){
+//       for(k=0; k<pSrcA->numCols; k++){
+//         pDst->pData[j+ i*pDst->numCols] += pSrcA->pData[i*pSrcA->numCols + k ] * pSrcB->pData[k*pSrcB->numCols + j];
+//       }
+//     }
+//   }
+// }
+
+static inline void mat_mult(const arm_matrix_instance_f32 * pSrcA, const arm_matrix_instance_f32 * pSrcB, arm_matrix_instance_f32 * pDst) 
+{ 
+  bool is_valid = (pSrcA->numCols == pSrcB->numRows) && (pSrcA->numRows == pDst->numRows) && (pSrcB->numCols == pDst->numCols);
+  configASSERT(is_valid);
+  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, pSrcA->numRows, pSrcB->numCols, pSrcA->numCols, 1.0, pSrcA->pData, pSrcA->numCols, pSrcB->pData, pSrcB->numCols, 0.0, pDst->pData, pDst->numCols);
+}
+
+// static inline void mat_scale(const arm_matrix_instance_f32 * pSrcA, float32_t scale, arm_matrix_instance_f32 * pDst) {
+//   bool is_valid = (pSrcA->numRows == pDst->numRows) && (pSrcA->numCols == pDst->numCols);
+//   configASSERT(is_valid);
+//   uint8_t i,j;
+//   for (i=0 ; i< pSrcA->numRows; i++){
+//     for(j=0 ; j< pSrcA->numCols; j++){
+//       pDst->pData[i * pDst->numCols + j] = scale * pSrcA->pData[i*pSrcA->numCols + j];
+//     }
+//   } 
+// }
+
+static inline void mat_scale(const arm_matrix_instance_f32 * pSrcA, float32_t scale, arm_matrix_instance_f32 * pDst) 
+{
+  bool is_valid = (pSrcA->numRows == pDst->numRows) && (pSrcA->numCols == pDst->numCols);
+  configASSERT(is_valid);
+  cblas_sscal(pSrcA->numRows*pSrcA->numCols, scale, pSrcA->pData, 1);
+}
+#endif
+
 static inline float limPos(float in) {
   if (in < 0.0f) {
     return 0.0f;
@@ -113,7 +227,3 @@ static inline float clip1(float a) {
   return a;
 }
 
-static inline void mat_scale(const arm_matrix_instance_f32 * pSrcA, float32_t scale, arm_matrix_instance_f32 * pDst) {
-  arm_status result = arm_mat_scale_f32(pSrcA, scale, pDst);
-  ASSERT(ARM_MATH_SUCCESS == result);
-}

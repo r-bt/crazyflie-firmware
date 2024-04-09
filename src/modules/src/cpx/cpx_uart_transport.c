@@ -50,7 +50,9 @@
 #include "queue.h"
 #include "stm32fxxx.h"
 #include "system.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #include "cpx.h"
 #include "cpx_uart_transport.h"

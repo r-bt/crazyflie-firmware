@@ -35,7 +35,9 @@
 #include "param.h"
 #include "statsCnt.h"
 #include "mem.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #include "lighthouse_position_est.h"
 #include "lighthouse_geometry.h"

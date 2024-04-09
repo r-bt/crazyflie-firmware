@@ -27,7 +27,9 @@
 #define _CRTP_LOCALIZATION_SERVICE_H_
 
 #include "stabilizer_types.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifdef CONFIG_DECK_LIGHTHOUSE
 #include "pulse_processor.h"
@@ -73,7 +75,10 @@ typedef enum
 void locSrvInit(void);
 
 // Send range in float. After 5 ranges it will send the packet.
-void locSrvSendRangeFloat(uint8_t id, float range);
+#ifndef CONFIG_PLATFORM_SITL
+  void locSrvSendRangeFloat(uint8_t id, float range);
+#endif
+
 #ifdef CONFIG_DECK_LIGHTHOUSE
 void locSrvSendLighthouseAngle(int baseStation, pulseProcessorResult_t* angles);
 #endif

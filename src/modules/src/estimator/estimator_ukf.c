@@ -54,7 +54,9 @@
 #include "estimator.h"
 #include "kalman_supervisor.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "stm32f4xx.h"
+#endif
 
 #include "FreeRTOS.h"
 #include "queue.h"

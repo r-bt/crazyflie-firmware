@@ -27,7 +27,9 @@
 
 #pragma once
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #define __INCLUDED_FROM_PLATFORM_DEFAULTS__
 
@@ -42,6 +44,9 @@
 #endif
 #ifdef CONFIG_PLATFORM_FLAPPER
     #include "platform_defaults_flapper.h"
+#endif
+#ifdef CONFIG_PLATFORM_SITL
+    #include "platform_defaults_sitl.h"
 #endif
 
 // Drone physical constants

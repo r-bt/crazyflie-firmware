@@ -41,7 +41,9 @@
 #include "task.h"
 #include "queue.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "deck.h"
 #include "system.h"
 #include "debug.h"

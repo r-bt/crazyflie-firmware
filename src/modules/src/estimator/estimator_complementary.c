@@ -25,7 +25,9 @@
  * estimator_complementary.c - a complementary estimator
  */
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "stm32f4xx.h"
+#endif
 
 #include "FreeRTOS.h"
 #include "queue.h"

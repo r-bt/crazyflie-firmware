@@ -41,11 +41,14 @@
 
 #ifndef CONFIG_H_
 #define CONFIG_H_
+#ifndef CONFIG_PLATFORM_SITL
 #include "nrf24l01.h"
 
 #include "trace.h"
+#endif
 #include "usec_time.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #define CONFIG_BLOCK_ADDRESS    (2048 * (64-1))
 #define MCU_ID_ADDRESS          0x1FFF7A10
 #define MCU_FLASH_SIZE_ADDRESS  0x1FFF7A22
@@ -58,6 +61,18 @@
 #define configGENERATE_RUN_TIME_STATS 1
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() usecTimerInit()
 #define portGET_RUN_TIME_COUNTER_VALUE() usecTimestamp()
+#else
+#define CONFIG_BLOCK_ADDRESS      (2048 * (64-1))
+#define MCU_ID_ADDRESS          0x1FFF7A10
+#define MCU_FLASH_SIZE_ADDRESS  0x1FFF7A22
+#define FREERTOS_HEAP_SIZE        40000
+#define FREERTOS_MIN_STACK_SIZE   150
+#define FREERTOS_MCU_CLOCK_HZ     168000000
+
+#define configGENERATE_RUN_TIME_STATS 1
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()    /* no-op */
+#define portGET_RUN_TIME_COUNTER_VALUE()            ulPortGetRunTime()
+#endif
 
 
 // Task priorities. Higher number higher priority

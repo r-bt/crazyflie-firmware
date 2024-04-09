@@ -73,9 +73,11 @@ bool memTest(void) {
     return false;
   }
 
+  #ifndef CONFIG_PLATFORM_SITL
   if (owMemHandler == 0) {
     return false;
   }
+  #endif
 
   return true;
 }

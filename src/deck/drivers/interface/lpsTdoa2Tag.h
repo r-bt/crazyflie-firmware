@@ -6,7 +6,9 @@
 
 #include "mac.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 extern uwbAlgorithm_t uwbTdoa2TagAlgorithm;
 

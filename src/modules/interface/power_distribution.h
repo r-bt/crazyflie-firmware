@@ -69,4 +69,11 @@ uint16_t powerDistributionStopRatio(uint32_t id);
  */
 uint32_t powerDistributionGetIdleThrust();
 
+#ifdef CONFIG_PLATFORM_SITL
+#define NBR_OF_MOTORS 4
+void motorsSetRatio(const motors_thrust_pwm_t* motorPwm);
+
+uint16_t getMotorRatio(int id);
+#endif
+
 #endif //__POWER_DISTRIBUTION_H__

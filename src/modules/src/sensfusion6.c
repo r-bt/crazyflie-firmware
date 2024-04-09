@@ -30,7 +30,9 @@
 #include "param.h"
 #include "physicalConstants.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifdef CONFIG_IMU_MADGWICK_QUATERNION
   #define BETA_DEF     0.01f    // 2 * proportional gain

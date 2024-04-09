@@ -32,7 +32,9 @@
 #ifndef __LPS_TDMA_H__
 #define __LPS_TDMA_H__
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #ifndef CONFIG_DECK_LOCO_TDMA_SLOTS
 #ifdef CONFIG_DECK_LOCO_TDMA

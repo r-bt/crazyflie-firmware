@@ -13,3 +13,7 @@
 [submodule "vendor/unity"]
 	path = vendor/unity
 	url = https://github.com/throwtheswitch/unity.git
+[submodule "tools/crazyflie-simulation"]
+	path = tools/crazyflie-simulation
+	url = https://github.com/llanesc/crazyflie-simulation.git
+	branch = sitl-release

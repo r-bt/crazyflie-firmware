@@ -36,7 +36,9 @@
 #include "stream_buffer.h"
 #include "debug.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "config.h"
 #include "nvic.h"
 #include "uart2.h"

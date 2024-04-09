@@ -32,7 +32,9 @@
 #include <math.h>
 #include "test_support.h"
 #include "physicalConstants.h"
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 // Decoding contants
 // Times are expressed in a 24MHz clock

@@ -24,7 +24,9 @@
 
 #include <stdbool.h>
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 #include "FreeRTOS.h"
 #include "task.h"

@@ -63,7 +63,9 @@
 #include "mem.h"
 #include "eventtrigger.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 
 // Hardware defines
 #ifdef CONFIG_DECK_USD_USE_ALT_PINS_AND_SPI

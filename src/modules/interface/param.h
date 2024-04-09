@@ -39,6 +39,12 @@ struct param_s {
   void * address;
   void (*callback)(void);
   void * (*getter)(void);
+  /*TODO: Need a better solution for this */
+  #if defined(ARCH_32) && defined(CONFIG_PLATFORM_SITL)
+    uint8_t useless[3];
+  #elif defined(ARCH_64) && defined(CONFIG_PLATFORM_SITL)
+    uint8_t useless[24];
+  #endif
 };
 
 typedef uint8_t * (*paramGetterUInt8)(void);

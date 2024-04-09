@@ -35,7 +35,9 @@
 #include "semphr.h"
 #include "static_mem.h"
 
+#ifndef CONFIG_PLATFORM_SITL
 #include "autoconf.h"
+#endif
 #include "led.h"
 
 #ifdef CONFIG_DEBUG_ENABLE_LED_MORSE
