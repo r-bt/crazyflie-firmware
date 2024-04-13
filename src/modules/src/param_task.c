@@ -94,7 +94,6 @@ void paramTask(void * prm)
         case MISC_GET_EXTENDED_TYPE:
           paramGetExtendedType(&p);
           break;
-        #ifndef CONFIG_PLATFORM_SITL
         case MISC_GET_DEFAULT_VALUE:
           paramGetDefaultValue(&p);
           break;
@@ -107,7 +106,6 @@ void paramTask(void * prm)
         case MISC_PERSISTENT_CLEAR:
           paramPersistentClear(&p);
           break;
-        #endif
         default:
           break;
       }
