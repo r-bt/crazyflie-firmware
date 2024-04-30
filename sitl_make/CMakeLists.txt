@@ -1,7 +1,7 @@
 # Original author: https://github.com/wuwushrek
 # Modified by: Christian Llanes (https://github.com/llanesc)
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11.0 FATAL_ERROR)
 cmake_policy(SET CMP0042 NEW)
 cmake_policy(SET CMP0048 NEW)
 cmake_policy(SET CMP0054 NEW)
@@ -27,8 +27,6 @@ find_package(PkgConfig REQUIRED)
 # find thread package
 find_package (Threads REQUIRED)
 
-find_package(BLAS REQUIRED)
-find_package(LAPACK REQUIRED)
 
 set (CF2_SITL_ROOT_DIR
   ${CMAKE_CURRENT_SOURCE_DIR}/../
@@ -172,13 +170,13 @@ set(SRCS
   ${CF2_SITL_SRCS_DIR}/modules/src/estimator/estimator_kalman.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/kalman_core.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_absolute_height.c
-  ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_distance_robust.c
+  # ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_distance_robust.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_distance.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_flow.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_pose.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_position.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_sweep_angles.c
-  ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_tdoa_robust.c
+  # ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_tdoa_robust.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_tdoa.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_tof.c
   ${CF2_SITL_SRCS_DIR}/modules/src/kalman_core/mm_yaw_error.c
@@ -232,9 +230,9 @@ set(SRCS
 # Create an executable
 add_executable(cf2 ${SRCS})
 
-target_link_libraries(cf2 ${CMAKE_THREAD_LIBS_INIT} m ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+target_link_libraries(cf2 ${CMAKE_THREAD_LIBS_INIT} m)
 
-target_compile_options(cf2 PUBLIC -DCONFIG_DECK_FORCE -DCONFIG_ESTIMATOR_KALMAN -DCONFIG_ESTIMATOR_KALMAN_ENABLE -DCONFIG_ESTIMATOR_UKF_ENABLE -DCRAZYFLIE_FW -DCONFIG_PLATFORM_SITL -DARCH_64)
+target_compile_options(cf2 PUBLIC -DCONFIG_DECK_FORCE -DCONFIG_ESTIMATOR_KALMAN -DCONFIG_ESTIMATOR_KALMAN_ENABLE -DCRAZYFLIE_FW -DCONFIG_PLATFORM_SITL -DARCH_64)
 target_compile_definitions(cf2 PUBLIC CONFIG_PLATFORM_SITL)
 set_target_properties(
   cf2 PROPERTIES LINK_FLAGS "-Wl,--gc-sections,-T${CMAKE_CURRENT_SOURCE_DIR}/log_param_linker.ld"

@@ -300,8 +300,12 @@ static void updateQueuedMeasurements(const uint32_t nowMs, const bool quadIsFlyi
     switch (m.type) {
       case MeasurementTypeTDOA:
         if(robustTdoa){
+          #ifndef CONFIG_PLATFORM_SITL
           // robust KF update with TDOA measurements
           kalmanCoreRobustUpdateWithTdoa(&coreData, &m.data.tdoa, &outlierFilterTdoaState);
+          #else
+          DEBUG_PRINT("Robust TDOA not supported in SITL\n");
+          #endif
         }else{
           // standard KF update
           kalmanCoreUpdateWithTdoa(&coreData, &m.data.tdoa, nowMs, &outlierFilterTdoaState);
@@ -315,8 +319,12 @@ static void updateQueuedMeasurements(const uint32_t nowMs, const bool quadIsFlyi
         break;
       case MeasurementTypeDistance:
         if(robustTwr){
+            #ifndef CONFIG_PLATFORM_SITL
             // robust KF update with UWB TWR measurements
             kalmanCoreRobustUpdateWithDistance(&coreData, &m.data.distance);
+            #else
+            DEBUG_PRINT("Robust TWR not supported in SITL\n");
+            #endif
         }else{
             // standard KF update
             kalmanCoreUpdateWithDistance(&coreData, &m.data.distance);
