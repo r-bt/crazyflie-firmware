@@ -3,6 +3,7 @@
 #include "log.h"
 #include "task.h"
 
+#include "choose_app.h"
 #include "common.h"
 #include "p2p_interface.h"
 #include "settings.h"
@@ -12,6 +13,11 @@
 
 // State of peer copters
 copter_full_state_t copters[MAX_ADDRESS];
+
+// Swarmalator control parameters
+static uint8_t isRunning = 0;
+static bool isControlDataSetYet = false;
+static uint32_t controlDataVersion = 0;
 
 // Keeps track of the number of packets sent
 static uint8_t counter = 0;
@@ -48,11 +54,22 @@ static void p2pcallbackHandler(P2PPacket* p)
     memcpy(&copters[received_id], &rxMessage.fullState, sizeof(copter_full_state_t));
     copters[received_id].timestamp = nowMs;
 
+// Check if the message contains control data
+#ifdef BUILD_PILOT_APP
+    if (rxMessage.isControlDataValid) {
+        if (!isControlDataSetYet || rxMessage.controlDataVersion > controlDataVersion) {
+            isControlDataSetYet = true;
+            controlDataVersion = rxMessage.controlDataVersion;
+            isRunning = rxMessage.isRunning;
+        }
+    }
+#endif
+
     // If not sniffer, record the position with the peer localization service
     if (received_id > 0) {
         enum State state = rxMessage.fullState.state;
 
-        if (state == STATE_TAKING_OFF || state == STATE_HOVERING || state == STATE_EXECUTING_SWARMALATOR || state == STATE_PREPARING_FOR_LAND || state == STATE_LANDING) {
+        if (state == STATE_TAKING_OFF || state == STATE_HOVERING || state == STATE_EXECUTING_SWARMALATOR || state == STATE_PREPARING_TO_LAND || state == STATE_LANDING) {
 
             positionMeasurement_t pos_measurement;
             memcpy(&pos_measurement.pos, &rxMessage.fullState.position, sizeof(Position));
@@ -78,6 +95,12 @@ void broadcastToPeers(const copter_full_state_t* state, const uint32_t nowMs)
 
     memcpy(&txMessage.fullState, state, sizeof(copter_full_state_t));
     txMessage.fullState.counter = counter;
+
+    txMessage.isControlDataValid = isControlDataSetYet;
+    if (isControlDataSetYet) {
+        txMessage.isRunning = isRunning;
+        txMessage.controlDataVersion = controlDataVersion;
+    }
 
     txMessage.magicNumber = THE_MAGIC_NUMBER;
 
@@ -125,3 +148,50 @@ void initPeerStates()
         copters[i].state = STATE_UNKNOWN;
     }
 }
+
+void setIsRunning(uint8_t isRunningVal)
+{
+    isRunning = isRunningVal;
+    isControlDataSetYet = true;
+    controlDataVersion++;
+}
+
+bool isExperimentRunning(void)
+{
+    return isRunning;
+}
+
+copter_full_state_t getPeerState(uint8_t id)
+{
+    if (id >= MAX_ADDRESS) {
+        DEBUG_PRINT("Invalid ID %u\n", id);
+        return (copter_full_state_t) { 0 };
+    }
+
+    return copters[id];
+}
+
+/**
+ * Expose the copter states through the Crazyflie Logging Framework
+ */
+
+// clang-format off
+#define add_copter_log(i)   LOG_GROUP_START(id_##i)\
+                            LOG_ADD(LOG_UINT8, state, &copters[i].state)\
+                            LOG_ADD(LOG_UINT8, voltage, &copters[i].battery_voltage)\
+                            LOG_ADD(LOG_UINT8, counter, &copters[i].counter)\
+                            LOG_ADD(LOG_FLOAT, x, &copters[i].position.x)\
+                            LOG_ADD(LOG_FLOAT, y, &copters[i].position.y)\
+                            LOG_ADD(LOG_FLOAT, z, &copters[i].position.z)\
+                            LOG_ADD(LOG_FLOAT, phase, &copters[i].phase)\
+                            LOG_GROUP_STOP(id_i)
+
+add_copter_log(1)
+add_copter_log(2)
+add_copter_log(3)
+add_copter_log(4)
+add_copter_log(5)
+add_copter_log(6)
+add_copter_log(7)
+add_copter_log(8)
+add_copter_log(9)

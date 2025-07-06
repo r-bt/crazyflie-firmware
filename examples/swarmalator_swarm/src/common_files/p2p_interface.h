@@ -15,15 +15,19 @@ typedef struct {
     uint8_t battery_voltage; // Normalized to 0-255 (0-3.3V)
     uint32_t timestamp;
     Position position;
+    float phase;
 } copter_full_state_t;
 
 typedef struct {
     copter_full_state_t fullState;
 
     // Higher level control
-    int32_t ageOfControlDataMs; // The age of the control data is (in ms). When receiving data, ignore it if it is older than the current data. When transmitting, set the age to match what was received + the time that has passed since then.
+    uint32_t controlDataVersion;
     uint8_t isControlDataValid;
     uint32_t magicNumber;
+
+    // Control parameters
+    uint8_t isRunning; // 0 = experiment not running, 1 = experiment running
 } copter_message_t;
 
 /**
@@ -62,5 +66,25 @@ void printPeers(void);
  * Set all peer states to unknown
  */
 void initPeerStates(void);
+
+/**
+ * Check if the experiment is running
+ *
+ * @return True if the experiment is running, false otherwise
+ */
+bool isExperimentRunning(void);
+
+/**
+ * Set the experiment running state
+ */
+void setIsRunning(uint8_t isRunningVal);
+
+/**
+ * Get's the state of a peer
+ *
+ * @param id The ID of the peer
+ * @return The state of the peer
+ */
+copter_full_state_t getPeerState(uint8_t id);
 
 #endif // P2P_INTERFACE_H

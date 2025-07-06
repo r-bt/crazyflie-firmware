@@ -3,17 +3,21 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "FreeRTOS.h"
 #include "app.h"
 #include "common.h"
 #include "configblock.h"
+#include "crtp_commander_high_level.h"
+#include "led_ring.h"
 #include "movement.h"
 #include "p2p_interface.h"
 #include "param_log_interface.h"
 #include "settings.h"
 #include "supervisor.h"
+#include "swarmalator.h"
 #include "task.h"
 #include "timers.h"
 
@@ -33,7 +37,27 @@ enum State state = STATE_IDLE;
 static uint32_t now_ms = 0;
 static uint32_t position_lock_start_time_ms = 0;
 
+static struct HSV ledColor = { 0, 255, 255 }; // Initial color for the LED ring
+
+static uint32_t random_time_for_next_event_ms = 0;
+
+static float padX = 0.0;
+static float padY = 0.0;
+static float padZ = 0.0;
+
+static uint32_t stabilizeEndTime_ms;
+
+static bool isCrashInitialized = false;
+
 // Timer functions
+
+uint32_t get_next_random_timeout(uint32_t now_ms)
+{
+    uint32_t extra = (rand() % (TAKE_OFF_TIME_MAX - TAKE_OFF_TIME_MIN)) + TAKE_OFF_TIME_MIN;
+    uint32_t timeout = now_ms + extra;
+    DEBUG_PRINT("Next random timeout dt: %lu \n", extra);
+    return timeout;
+}
 
 static void broadcastData(xTimerHandle timer)
 {
@@ -48,8 +72,29 @@ static void broadcastData(xTimerHandle timer)
     fullState.position.x = getX();
     fullState.position.y = getY();
     fullState.position.z = getZ();
+    fullState.phase = getPhase();
 
     broadcastToPeers(&fullState, nowMs);
+}
+
+static void startTakeOffSequence()
+{
+    Position pad_sampler = { 0.0f, 0.0f, 0.0f };
+
+    for (uint8_t i = 0; i < NUMBER_OF_PAD_SAMPLES; i++) {
+        pad_sampler.x += getX();
+        pad_sampler.y += getY();
+        pad_sampler.z += getZ();
+        vTaskDelay(M2T(10));
+    }
+
+    padX = pad_sampler.x / NUMBER_OF_PAD_SAMPLES;
+    padY = pad_sampler.y / NUMBER_OF_PAD_SAMPLES;
+    padZ = pad_sampler.z / NUMBER_OF_PAD_SAMPLES;
+    DEBUG_PRINT("Base position: (%f, %f, %f)\n", (double)padX, (double)padY, (double)padZ);
+
+    DEBUG_PRINT("Taking off...\n");
+    crtpCommanderHighLevelTakeoff(padZ + TAKE_OFF_HEIGHT, 1.0);
 }
 
 static void stateTransition(xTimerHandle timer)
@@ -61,7 +106,7 @@ static void stateTransition(xTimerHandle timer)
     } else if (isBatteryLow() && (state == STATE_HOVERING || state == STATE_EXECUTING_SWARMALATOR)) {
         DEBUG_PRINT("Battery low, going home\n");
         // TODO: Instruct commander to go home
-        state = STATE_GOING_HOME;
+        state = STATE_PREPARING_TO_LAND;
     }
 
     now_ms = T2M(xTaskGetTickCount());
@@ -77,6 +122,104 @@ static void stateTransition(xTimerHandle timer)
         if (hasPosLock()) {
             DEBUG_PRINT("State: WAIT_FOR_POSITION_LOCK; Position lock acquired\n");
             state = STATE_WAIT_FOR_TAKE_OFF;
+        } else {
+            DEBUG_PRINT("State: WAIT_FOR_POSITION_LOCK; Waiting for position lock\n");
+        }
+        break;
+    case STATE_WAIT_FOR_TAKE_OFF:
+        if (!chargedForTakeoff()) {
+            DEBUG_PRINT("Battery not charged for take off\n");
+            // do nothing, wait for the battery to be charged
+        } else if (isExperimentRunning()) {
+            DEBUG_PRINT("Entering takeoff queue...\n");
+            state = STATE_QUEUED_FOR_TAKE_OFF;
+        }
+        break;
+    case STATE_QUEUED_FOR_TAKE_OFF:
+        if (!chargedForTakeoff()) {
+            state = STATE_WAIT_FOR_TAKE_OFF;
+        } else {
+            DEBUG_PRINT("Preparing for take off...\n");
+            if (supervisorRequestArming(true)) {
+                random_time_for_next_event_ms = get_next_random_timeout(now_ms);
+                state = STATE_PREPARING_FOR_TAKE_OFF;
+            }
+        }
+        break;
+    case STATE_PREPARING_FOR_TAKE_OFF:
+        if (now_ms > random_time_for_next_event_ms) {
+            DEBUG_PRINT("Taking off...\n");
+            startTakeOffSequence();
+            state = STATE_TAKING_OFF;
+        }
+        break;
+    case STATE_TAKING_OFF:
+        if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+            DEBUG_PRINT("Hovering, waiting for command to start\n");
+            state = STATE_HOVERING;
+        }
+        break;
+    case STATE_HOVERING:
+        if (!isExperimentRunning()) {
+            DEBUG_PRINT("Not running, going home\n");
+            random_time_for_next_event_ms = get_next_random_timeout(now_ms);
+            state = STATE_PREPARING_TO_LAND;
+        } else {
+            DEBUG_PRINT("Running, executing swarmalator\n");
+            update_swarmalator(my_id);
+
+            // Update the phase
+            ledColor.hue = radians_to_hue(getPhase());
+            setRingSolidColor(hsvToRgb(ledColor));
+
+            // Go to the new position
+            DEBUG_PRINT("Going to (%f, %f) in %f seconds\n", (double)getDesiredDeltaX(), (double)getDesiredDeltaY(), (double)getDuration());
+            crtpCommanderHighLevelGoTo2(getDesiredDeltaX(), getDesiredDeltaY(), 0, 0.0f, 0.1f, true, false);
+        }
+        break;
+    case STATE_PREPARING_TO_LAND:
+        // Turn off the LED ring
+        setRingSolidColorRGB(0, 0, 0);
+
+        if (isExperimentRunning()) {
+            DEBUG_PRINT("Experiment running, going home\n");
+            state = STATE_HOVERING;
+        } else if (now_ms > random_time_for_next_event_ms) {
+            DEBUG_PRINT("Lowering..\n");
+            crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
+            stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
+            state = STATE_WAITING_AT_PAD;
+        }
+        break;
+    case STATE_WAITING_AT_PAD:
+        if (now_ms > stabilizeEndTime_ms || (fabs((padZ + LANDING_HEIGHT) - getZ()) < MAX_PAD_ERR)) {
+            if (now_ms > stabilizeEndTime_ms) {
+                DEBUG_PRINT("Warning: timeout!\n");
+            }
+
+            DEBUG_PRINT("Landing...\n");
+            crtpCommanderHighLevelLand(padZ, LANDING_DURATION);
+            state = STATE_LANDING;
+        }
+        break;
+    case STATE_LANDING:
+        if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+            DEBUG_PRINT("Landed\n");
+            crtpCommanderHighLevelStop();
+            if (supervisorRequestArming(false)) {
+                initSwarmalator(my_id); // reset swarmalator
+                state = STATE_WAIT_FOR_TAKE_OFF;
+            }
+        }
+        break;
+    case STATE_CRASHED:
+        // Disbale the LED ring
+        setRingSolidColorRGB(0, 0, 0);
+        if (!isCrashInitialized) {
+            crtpCommanderHighLevelStop();
+            DEBUG_PRINT("Crashed, running crash sequence\n");
+            isCrashInitialized = true;
+            // maybe need to disarm here
         }
         break;
     default:
@@ -103,6 +246,12 @@ void appMain()
     // Init P2P
     initP2P();
     initPeerStates();
+
+    // Init the LED ring
+    initLedRing();
+
+    // Init swarmalator
+    initSwarmalator(my_id);
 
     // Create timer to send position state to other Crazyflies
     sendPosTimer = xTimerCreate("SendPosTimer", M2T(BROADCAST_PERIOD_MS), pdTRUE, NULL, broadcastData);

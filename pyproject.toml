@@ -5,5 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10.6"
 dependencies = [
+    "anywidget>=0.9.18",
+    "black>=25.1.0",
     "cfclient>=2025.2",
+    "colorama>=0.4.6",
+    "dash>=3.0.1",
+    "matplotlib>=3.10.1",
+    "plotly>=6.0.1",
+    "pyzmq>=26.2.1",
 ]

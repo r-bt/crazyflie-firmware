@@ -5,11 +5,13 @@
 #include <math.h>
 
 #include "FreeRTOS.h"
+#include "debug.h"
 #include "param_log_interface.h"
 #include "sensors.h"
 
 #define LOCK_LENGTH 50
-#define LOCK_THRESHOLD 0.001f
+#define LOCK_THRESHOLD 0.005f
+#define CHARGED_FOR_TAKEOFF_VOLTAGE 3.5f
 
 /**
  * Resets the position lock
@@ -24,5 +26,14 @@ void resetPosLock();
  * @return True if the Crazyflie has a position lock, false otherwise
  */
 bool hasPosLock();
+
+/**
+ * Checks if the Crazyflie is charged for takeoff
+ *
+ * Checks if the battery voltage is above the takeoff threshold
+ *
+ * @return True if the Crazyflie is charged for takeoff, false otherwise
+ */
+bool chargedForTakeoff();
 
 #endif // MOVEMENT_H

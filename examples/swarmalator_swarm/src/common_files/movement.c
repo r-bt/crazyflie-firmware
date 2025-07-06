@@ -59,7 +59,14 @@ bool hasPosLock()
         }
     }
 
-    result = (count >= LOCK_LENGTH) && (lxMax - lxMin < LOCK_THRESHOLD) && (lyMax - lyMin < LOCK_THRESHOLD) && (lzMax - lzMin < LOCK_THRESHOLD) && isLighthouseAvailable() && sensorsAreCalibrated();
+    result = (count >= LOCK_LENGTH) && ((lxMax - lxMin) < LOCK_THRESHOLD) && ((lyMax - lyMin) < LOCK_THRESHOLD) && ((lzMax - lzMin) < LOCK_THRESHOLD) && isLighthouseAvailable() && sensorsAreCalibrated();
+
+    DEBUG_PRINT("Check; count: %d, lxMax: %f, lxMin: %f, lyMax: %f, lyMin: %f, lzMax: %f, lzMin: %f\n", count, (double)lxMax, (double)lxMin, (double)lyMax, (double)lyMin, (double)lzMax, (double)lzMin);
 
     return result;
+}
+
+bool chargedForTakeoff()
+{
+    return getVoltage() > CHARGED_FOR_TAKEOFF_VOLTAGE;
 }
