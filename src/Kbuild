@@ -1,3 +1,12 @@
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+# SITL-specific build - exclude hardware-specific directories
+obj-y += hal/
+obj-y += init/
+obj-y += modules/
+obj-y += platform/
+obj-y += utils/
+else
+# Hardware build - include all directories
 obj-y += deck/
 obj-y += drivers/
 obj-y += hal/
@@ -6,3 +15,4 @@ obj-y += lib/
 obj-y += modules/
 obj-y += platform/
 obj-y += utils/
+endif

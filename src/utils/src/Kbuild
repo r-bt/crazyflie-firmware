@@ -21,7 +21,9 @@ obj-y += statsCnt.o
 
 ### Sub directories
 obj-y += kve/
+ifndef CONFIG_PLATFORM_SITL
 obj-y += lighthouse/
+endif
 obj-y += tdoa/
 
 
