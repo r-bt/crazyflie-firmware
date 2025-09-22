@@ -1,4 +1,5 @@
-obj-y += CMSIS/CMSIS/DSP/Source/BasicMathFunctions/arm_abs_f32.o
+# ARM CMSIS DSP - only for embedded platforms
+ifndef CONFIG_PLATFORM_SITL
 obj-y += CMSIS/CMSIS/DSP/Source/BasicMathFunctions/arm_abs_q15.o
 obj-y += CMSIS/CMSIS/DSP/Source/BasicMathFunctions/arm_abs_q31.o
 obj-y += CMSIS/CMSIS/DSP/Source/BasicMathFunctions/arm_abs_q7.o
@@ -270,8 +271,22 @@ obj-y += CMSIS/CMSIS/DSP/Source/TransformFunctions/arm_rfft_init_q15.o
 obj-y += CMSIS/CMSIS/DSP/Source/TransformFunctions/arm_rfft_init_q31.o
 obj-y += CMSIS/CMSIS/DSP/Source/TransformFunctions/arm_rfft_q15.o
 obj-y += CMSIS/CMSIS/DSP/Source/TransformFunctions/arm_rfft_q31.o
+endif  # ifndef CONFIG_PLATFORM_SITL
 
 # FreeRTOS
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+# POSIX port for SITL
+obj-y += FreeRTOS/event_groups.o
+obj-y += FreeRTOS/list.o
+obj-y += FreeRTOS/portable/ThirdParty/GCC/Posix/port.o
+obj-y += FreeRTOS/portable/ThirdParty/GCC/Posix/utils/wait_for_event.o
+obj-y += FreeRTOS/portable/MemMang/heap_3.o
+obj-y += FreeRTOS/queue.o
+obj-y += FreeRTOS/tasks.o
+obj-y += FreeRTOS/timers.o
+obj-y += FreeRTOS/croutine.o
+else
+# ARM port for embedded platforms
 obj-y += FreeRTOS/event_groups.o
 obj-y += FreeRTOS/list.o
 obj-y += FreeRTOS/portable/GCC/ARM_CM4F/port.o
@@ -280,6 +295,7 @@ obj-y += FreeRTOS/queue.o
 obj-y += FreeRTOS/tasks.o
 obj-y += FreeRTOS/timers.o
 obj-y += FreeRTOS/stream_buffer.o
+endif
 
 # libdw1000
 obj-y += libdw1000/src/libdw1000.o

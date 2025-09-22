@@ -1,3 +1,13 @@
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+# SITL-specific HAL files
+obj-$(CONFIG_SENSORS_SITL) += sensors_sitl.o
+obj-y += usec_time_sitl.o
+obj-y += buzzer.o
+obj-y += storage.o
+obj-y += sensors.o
+obj-y += socketlink.o
+else
+# STM32-specific HAL files
 obj-y += amg8833.o
 obj-y += buzzer.o
 obj-y += freeRTOSdebug.o
@@ -22,3 +32,4 @@ obj-y += usbd_desc.o
 obj-y += usblink.o
 obj-y += usb.o
 obj-y += usec_time.o
+endif

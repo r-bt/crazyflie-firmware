@@ -1,2 +1,6 @@
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+obj-y += main_sitl.o
+else
 obj-y += main.o
 obj-y += startup_stm32f40xx.o
+endif

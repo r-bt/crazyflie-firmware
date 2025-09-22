@@ -62,6 +62,33 @@ INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
 INCLUDES += -I$(LIB)/vl53l1 -I$(LIB)/vl53l1/core/inc
 INCLUDES += -I$(KBUILD_OUTPUT)/include/generated
 
+# SITL platform overrides
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+# Override architecture settings for SITL
+ARCH := x86_64
+SRCARCH := x86_64
+
+# Override ARM-specific compiler flags with host compilation flags
+ARCH_CFLAGS := -O0 -Wno-unused-variable -std=gnu11 -g3 -Wall -Wno-maybe-uninitialized
+ARCH_CFLAGS += -Wno-error=maybe-uninitialized -Wmissing-braces -fno-strict-aliasing
+ARCH_CFLAGS += -ffunction-sections -fdata-sections -Wdouble-promotion -Wno-deprecated-declarations
+ARCH_CFLAGS += -DCONFIG_SENSORS_SITL -DSENSORS_FORCE=SensorImplementation_sitl
+ARCH_CFLAGS += -DCONFIG_PLATFORM_SITL -DARCH_64 -DCRAZYFLIE_FW
+
+# SITL uses POSIX FreeRTOS port instead of ARM
+PORT = $(FREERTOS)/portable/ThirdParty/GCC/Posix
+INCLUDES += -I$(PORT)/utils
+
+# No cross-compilation for SITL
+CROSS_COMPILE :=
+CC := gcc
+LD := gcc
+
+# Host linker flags instead of ARM embedded flags
+LDFLAGS := -lpthread -lm
+image_LDFLAGS := -Wl,-Map=$(PROG).map,--gc-sections
+endif
+
 # Here we tell Kbuild where to look for Kbuild files which will tell the
 # buildsystem which sources to build
 objs-y += src
@@ -105,6 +132,10 @@ endif
 
 ifeq ($(CONFIG_PLATFORM_FLAPPER),y)
 PLATFORM = flapper
+endif
+
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+PLATFORM = sitl
 endif
 
 
