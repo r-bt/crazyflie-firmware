@@ -107,6 +107,10 @@ ifeq ($(CONFIG_PLATFORM_FLAPPER),y)
 PLATFORM = flapper
 endif
 
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+PLATFORM = sitl
+endif
+
 
 PLATFORM  ?= cf2
 PROG ?= $(PLATFORM)
@@ -117,9 +121,55 @@ else
 ARCH_CFLAGS += -Os -Werror
 endif
 
+# SITL platform overrides - must be AFTER all other ARCH_CFLAGS modifications
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+# Completely override ARM-specific compiler flags with host compilation flags
+ARCH_CFLAGS := -O0 -Wno-unused-variable -std=gnu11 -g3 -Wall -Wno-maybe-uninitialized
+ARCH_CFLAGS += -Wno-error=maybe-uninitialized -Wmissing-braces -fno-strict-aliasing
+ARCH_CFLAGS += -ffunction-sections -fdata-sections -Wdouble-promotion -Wno-deprecated-declarations
+ARCH_CFLAGS += -DCONFIG_SENSORS_SITL -DSENSORS_FORCE=SensorImplementation_sitl
+ARCH_CFLAGS += -DCONFIG_PLATFORM_SITL -DARCH_64 -DCRAZYFLIE_FW
+
+# Override architecture settings for SITL
+ARCH := x86_64
+SRCARCH := x86_64
+
+# SITL uses POSIX FreeRTOS port instead of ARM
+PORT = $(FREERTOS)/portable/ThirdParty/GCC/Posix
+INCLUDES += -I$(PORT)/utils
+
+# No cross-compilation for SITL (this should already be set in config, but ensure it)
+CROSS_COMPILE :=
+CC := gcc
+LD := gcc
+
+# Host linker flags instead of ARM embedded flags
+LDFLAGS := -lpthread -lm
+# Use macOS-compatible linker flags
+ifeq ($(shell uname),Darwin)
+image_LDFLAGS := -Wl,-Map,$(PROG).map,-dead_strip
+ARCH_CFLAGS += -DCONFIG_PLATFORM_MACOS_SITL
+else
+image_LDFLAGS := -Wl,-Map=$(PROG).map,--gc-sections
+endif
+endif
+
 _all:
 
+# SITL builds an executable, not firmware files
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+all: $(PROG)
+	@echo "Built SITL executable: $(PROG)"
+
+# For SITL, copy the .elf to a regular executable
+$(PROG): $(PROG).elf
+	@cp $< $@
+else
 all: $(PROG).hex $(PROG).bin
+	@echo "Build for the $(PLATFORM) platform!"
+	@$(PYTHON) $(srctree)/tools/make/versionTemplate.py --crazyflie-base $(srctree) --print-version
+	@$(PYTHON) $(srctree)/tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
+endif
 	@echo "Build for the $(PLATFORM) platform!"
 	@$(PYTHON) $(srctree)/tools/make/versionTemplate.py --crazyflie-base $(srctree) --print-version
 	@$(PYTHON) $(srctree)/tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
