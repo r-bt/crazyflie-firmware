@@ -145,12 +145,31 @@ LD := gcc
 
 # Host linker flags instead of ARM embedded flags
 LDFLAGS := -lpthread -lm
+# Use macOS-compatible linker flags
+ifeq ($(shell uname),Darwin)
+image_LDFLAGS := -Wl,-Map,$(PROG).map,-dead_strip
+ARCH_CFLAGS += -DCONFIG_PLATFORM_MACOS_SITL
+else
 image_LDFLAGS := -Wl,-Map=$(PROG).map,--gc-sections
+endif
 endif
 
 _all:
 
+# SITL builds an executable, not firmware files
+ifeq ($(CONFIG_PLATFORM_SITL),y)
+all: $(PROG)
+	@echo "Built SITL executable: $(PROG)"
+
+# For SITL, copy the .elf to a regular executable
+$(PROG): $(PROG).elf
+	@cp $< $@
+else
 all: $(PROG).hex $(PROG).bin
+	@echo "Build for the $(PLATFORM) platform!"
+	@$(PYTHON) $(srctree)/tools/make/versionTemplate.py --crazyflie-base $(srctree) --print-version
+	@$(PYTHON) $(srctree)/tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
+endif
 	@echo "Build for the $(PLATFORM) platform!"
 	@$(PYTHON) $(srctree)/tools/make/versionTemplate.py --crazyflie-base $(srctree) --print-version
 	@$(PYTHON) $(srctree)/tools/make/size.py $(SIZE) $(PROG).elf $(MEM_SIZE_FLASH_K) $(MEM_SIZE_RAM_K) $(MEM_SIZE_CCM_K)
