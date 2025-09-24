@@ -9,6 +9,9 @@ You'll need to use either the [Crazyflie VM](https://github.com/bitcraze/bitcraz
 [the toolbelt](https://github.com/bitcraze/toolbelt) or
 install some ARM toolchain.
 
+There is also experimental support for [building with nix](./nix.md).
+This allows to build the firmware in a reproducable way.
+
 ### Install a toolchain
 
 #### Toolchain and compiler version policy
@@ -22,9 +25,10 @@ $ sudo apt-get install make gcc-arm-none-eabi
 ```
 
 ##### macOS
+The required toolchain on macOS can be installed using [homebrew](https://brew.sh/)
+
 ```
-$ brew tap PX4/homebrew-px4
-$ brew install gcc-arm-none-eabi
+$ brew install gcc-arm-embedded
 ```
 
 ##### Windows
@@ -155,15 +159,15 @@ bindings_python : Build the python bindings for firmware wrappers
 
 ### Noteable Kbuild targets
 ```
-menuconfig      : Open up a terminal user interface to set configuration options
-defconfig       : Generate a `.config` with the default configuration options
-cf2_defconfig   : Merge configuration options from `configs/cf2_defconfig` with default
-cf21bl_defconfig: Merge configuration options from `configs/cf21bl_defconfig` with default
-tag_defconfig   : Merge configuration options from `configs/tag_defconfig` with default
-bolt_defconfig   : Merge configuration options from `configs/bolt_defconfig` with default
-allyesconfig    : Generate a `.config` with the all configuration options enabled
-allnoconfig     : Generate a `.config` with the all configuration options disabled
-randconfig      : Generate a `.config` with random valid values to all configuration options
+menuconfig         : Open up a terminal user interface to set configuration options
+defconfig          : Generate a `.config` with the default configuration options
+cf2_defconfig      : Merge configuration options from `configs/cf2_defconfig` with default
+cf21bl_defconfig   : Merge configuration options from `configs/cf21bl_defconfig` with default
+tag_defconfig      : Merge configuration options from `configs/tag_defconfig` with default
+bolt_defconfig     : Merge configuration options from `configs/bolt_defconfig` with default
+allyesconfig       : Generate a `.config` with the all configuration options enabled
+allnoconfig        : Generate a `.config` with the all configuration options disabled
+randconfig         : Generate a `.config` with random valid values to all configuration options
 ```
 
 ## Flashing
