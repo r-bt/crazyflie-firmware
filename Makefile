@@ -67,7 +67,10 @@ INCLUDES += -I$(KBUILD_OUTPUT)/include/generated
 objs-y += src
 objs-y += vendor
 
+ifeq ($(CONFIG_PLATFORM_SITL),n)
 objs-y += app_api
+endif
+
 objs-y += $(OOT)
 
 MEM_SIZE_FLASH_K = 1008
@@ -141,12 +144,16 @@ CC := gcc
 LD := gcc
 
 # Use different linker flags
-LDFLAGS := -lpthread -lm
+# Use portable pthread flags for both compile and link
+ARCH_CFLAGS += -pthread
+LDFLAGS := -pthread
 
 # Use macOS-compatible linker flags
 ifeq ($(shell uname),Darwin)
-image_LDFLAGS := -Wl,-Map,$(PROG).map,-dead_strip
+image_LDFLAGS := -Wl,-dead_strip
 ARCH_CFLAGS += -DCONFIG_PLATFORM_MACOS_SITL
+# Suppress libSystem.tbd warning on macOS
+LDFLAGS += -Wl,-w
 else
 image_LDFLAGS := -Wl,-Map=$(PROG).map,--gc-sections
 endif
