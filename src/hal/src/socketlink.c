@@ -94,7 +94,6 @@ static void socketlinkTask(void *param)
       recvlen = recvfrom(fd, p.raw, sizeof(p.raw), 0, (struct sockaddr *)&remaddr, &addrlen);
       if (recvlen > 0){
         p.size = recvlen - 1; // We remove the header size
-        DEBUG_PRINT("received packet: %d\n", p.size);
         xQueueSend(crtpPacketDelivery, &p, 0);
       } else {
         DEBUG_PRINT("error : %s \n" , strerror(errno));
