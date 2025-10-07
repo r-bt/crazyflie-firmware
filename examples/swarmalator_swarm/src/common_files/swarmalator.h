@@ -11,6 +11,15 @@
 
 #include "p2p_interface.h"
 
+typedef struct {
+    float K;
+    float J;
+    float A;
+    float B;
+    float naturalFrequency;
+    float startingPhase;
+} swarmalator_params_t;
+
 /**
  * @brief Initializes the swarmalator algorithm
  */
@@ -26,14 +35,14 @@ void update_swarmalator(uint8_t my_id);
  *
  * @return The desired delta x of the Crazyflie
  */
-float getDesiredDeltaX();
+float getDesiredVx();
 
 /**
  * @brief Gets the desired delta y of the Crazyflie
  *
  * @return The desired delta y of the Crazyflie
  */
-float getDesiredDeltaY();
+float getDesiredVy();
 
 /**
  * @brief Gets the desired duration of the trajectory

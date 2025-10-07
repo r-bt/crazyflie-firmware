@@ -24,7 +24,7 @@
 #define VOLTAGE_MAX 4.2f
 
 #define NUMBER_OF_PAD_SAMPLES 10 // number of samples to take to estimate the landing pad
-#define TAKE_OFF_HEIGHT 1.5f
+#define TAKE_OFF_HEIGHT 0.6f
 
 // Randomizing takeoff times
 #define TAKE_OFF_TIME_MAX 8000

@@ -11,13 +11,13 @@ static uint32_t prevUpdate_ms = 0;
 float K = 1.0f; // Phase synchronization strength
 float J = 1.0f; // Like-attracts-like strength
 float A = 1.0f; // Attraction strength
-float B = 2.0f; // Repulsion strength
+float B = 1.0f; // Repulsion strength
 
 float naturalFrequency = 1.0f;
 float phase = 0.0f; // Phase of the copter (radians)
 
-float desiredDeltaX = 0.0f; // Desired x position
-float desiredDeltaY = 0.0f; // Desired y position
+float desiredVx = 0.0f; // Desired x velocity
+float desiredVy = 0.0f; // Desired y velocity
 float duration = 0.0f; // Duration of the trajectory
 
 int agents = 3;
@@ -87,8 +87,8 @@ void update_swarmalator(uint8_t my_id)
     }
 
     // Update the desired position based on the velocity
-    desiredDeltaX = v_x_sum * ((T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f);
-    desiredDeltaY = v_y_sum * ((T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f);
+    desiredVx = v_x_sum;
+    desiredVy = v_y_sum;
     duration = (T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f;
 
     prevUpdate_ms = T2M(xTaskGetTickCount());
@@ -99,14 +99,14 @@ float getPhase()
     return phase;
 }
 
-float getDesiredDeltaX()
+float getDesiredVx()
 {
-    return desiredDeltaX;
+    return desiredVx;
 }
 
-float getDesiredDeltaY()
+float getDesiredVy()
 {
-    return desiredDeltaY;
+    return desiredVy;
 }
 
 float getDuration()

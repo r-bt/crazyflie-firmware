@@ -16,6 +16,7 @@ typedef struct {
     uint32_t timestamp;
     Position position;
     float phase;
+    uint8_t swarmalatorParamsCounter;
 } copter_full_state_t;
 
 typedef struct {
@@ -29,6 +30,13 @@ typedef struct {
     // Control parameters
     uint8_t isRunning; // 0 = experiment not running, 1 = experiment running
 } copter_message_t;
+
+typedef struct {
+    unit32_t magicNumber;
+    uint8_t id;
+    swarmalator_params_t swarmalatorParams;
+
+} swarmalator_params_message_t;
 
 /**
  * Initialize the P2P interface

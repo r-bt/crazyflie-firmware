@@ -6,7 +6,6 @@ from tkinter import Label, HORIZONTAL
 import tkinter.ttk as ttk
 from colorama import Fore
 from typing import List
-from dash_visualizer import DashVisualizer
 import zmq
 import threading
 import time
@@ -211,11 +210,6 @@ for i in range(MAX_COPTERS):
 
     cf.set_state("error")
     cf.set_battery(0.0)
-
-
-# Initialize Dash visualizer
-# visualizer = DashVisualizer()
-# visualizer.run_in_thread()
 
 buttons = ButtonsFrame(content, command_socket)
 

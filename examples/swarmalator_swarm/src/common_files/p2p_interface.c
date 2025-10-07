@@ -1,5 +1,4 @@
 #include "FreeRTOS.h"
-#include "debug.h"
 #include "log.h"
 #include "task.h"
 
@@ -8,11 +7,16 @@
 #include "p2p_interface.h"
 #include "settings.h"
 
+#define DEBUG_MODULE "P2P_INTERFACE"
+#include "debug.h"
+
 #define THE_MAGIC_NUMBER 0x12345678
 #define P2P_PORT 5 // Crazyflie allows PORT to be specified to differentiate between different types of packets
+#define SWARMALATOR_PARAMS_PORT 6
 
 // State of peer copters
 copter_full_state_t copters[MAX_ADDRESS];
+swarmalator_params_t swarmalatorParams;
 
 // Swarmalator control parameters
 static uint8_t isRunning = 0;
@@ -24,11 +28,23 @@ static uint8_t counter = 0;
 
 static void p2pcallbackHandler(P2PPacket* p)
 {
-    if (p->port != P2P_PORT) {
-        DEBUG_PRINT("Wrong port %u\n", p->port);
-        return;
-    }
+    DEBUG_PRINT("P2P packet received! Port: %u, Size: %u\n", p->port, p->size);
 
+    switch (p->port) {
+        case P2P_PORT:
+            p2pHandleCopterMessage(p);
+            break;
+        case SWARMALATOR_PARAMS_PORT:
+            p2pHandleSwarmalatorParamsMessage(p);
+            break;
+        default:
+            DEBUG_PRINT("Unknown port %u\n", p->port);
+            break;
+    }
+}
+
+static void p2pHandleCopterMessage(P2PPacket* p)
+{
     static copter_message_t rxMessage;
 
     uint32_t nowMs = T2M(xTaskGetTickCount());
@@ -82,10 +98,37 @@ static void p2pcallbackHandler(P2PPacket* p)
     }
 }
 
+static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
+{
+    static swarmalator_params_message_t rxMessage;
+    memcpy(&rxMessage, p->data, sizeof(rxMessage));
+
+    // Check if the magic number is correct
+    if (rxMessage.magicNumber != THE_MAGIC_NUMBER) {
+        DEBUG_PRINT("Wrong magic number %lu from %u\n", rxMessage.magicNumber, rxMessage.id);
+        return;
+    }
+
+    uint8_t my_id = getMyId();
+
+    // Check if we are the intended recipient
+    if (rxMessage.id != my_id) {
+        return;
+    }
+
+    // Save the swarmalator params
+    memcpy(&swarmalatorParams, &rxMessage.swarmalatorParams, sizeof(swarmalator_params_t));
+
+    // Update the swarmalator params counter
+    copters[my_id].swarmalatorParamsCounter++;
+}
+
 void initP2P()
 {
+    DEBUG_PRINT("P2P Interface initializing...\n");
     // Register callback handler for P2P packets
     p2pRegisterCB(p2pcallbackHandler);
+    DEBUG_PRINT("P2P Interface initialized\n");
 }
 
 void broadcastToPeers(const copter_full_state_t* state, const uint32_t nowMs)
@@ -110,9 +153,33 @@ void broadcastToPeers(const copter_full_state_t* state, const uint32_t nowMs)
     packet.size = sizeof(txMessage);
 
     // Broadcast the packet (TODO: Does this handle collisions?)
-    radiolinkSendP2PPacketBroadcast(&packet);
+    bool success = radiolinkSendP2PPacketBroadcast(&packet);
+
+    if (!success) {
+        DEBUG_PRINT("Failed to broadcast packet\n");
+    }
 
     counter++;
+}
+
+void broadcastSwarmalatorParams(uint8_t id, const swarmalator_params_t* swarmalatorParams) {
+    static P2PPacket packet;
+    static swarmalator_params_message_t swarmalatorParamsMessage;
+
+    memcpy(&swarmalatorParamsMessage.swarmalatorParams, swarmalatorParams, sizeof(swarmalator_params_t));
+    swarmalatorParamsMessage.magicNumber = THE_MAGIC_NUMBER;
+    swarmalatorParamsMessage.id = id;
+
+    packet.port = SWARMALATOR_PARAMS_PORT;
+    memcpy(packet.data, &swarmalatorParamsMessage, sizeof(swarmalator_params_message_t));
+    packet.size = sizeof(swarmalator_params_message_t);
+
+    // Broadcast the packet (TODO: Does this handle collisions?)
+    bool success = radiolinkSendP2PPacketBroadcast(&packet);
+
+    if (!success) {
+        DEBUG_PRINT("Failed to broadcast swarmalator params packet\n");
+    }
 }
 
 uint8_t compressVoltage(float voltage)

@@ -29,3 +29,5 @@ enum State {
     STATE_SNIFFING = 17,
     STATE_UNKNOWN = 255,
 };
+
+uint8_t getMyId(void);

@@ -20,6 +20,7 @@
 #include "swarmalator.h"
 #include "task.h"
 #include "timers.h"
+#include "commander.h"
 
 #define DEBUG_MODULE "SWARMALATOR_PILOT"
 #include "debug.h"
@@ -59,8 +60,23 @@ uint32_t get_next_random_timeout(uint32_t now_ms)
     return timeout;
 }
 
+static void setVelocitySetpoint(setpoint_t *setpoint, float vx, float vy, float z, float yawrate)
+{
+  setpoint->mode.z = modeAbs;
+  setpoint->position.z = z;
+  setpoint->mode.yaw = modeVelocity;
+  setpoint->attitudeRate.yaw = yawrate;
+  setpoint->mode.x = modeVelocity;
+  setpoint->mode.y = modeVelocity;
+  setpoint->velocity.x = vx;
+  setpoint->velocity.y = vy;
+
+  setpoint->velocity_body = false;
+}
+
 static void broadcastData(xTimerHandle timer)
 {
+
     uint32_t nowMs = T2M(xTaskGetTickCount());
 
     copter_full_state_t fullState;
@@ -100,6 +116,8 @@ static void startTakeOffSequence()
 static void stateTransition(xTimerHandle timer)
 {
     DEBUG_PRINT("State is %u\n", state);
+
+    setpoint_t setpoint;
 
     if (supervisorIsTumbled()) {
         state = STATE_CRASHED;
@@ -163,7 +181,10 @@ static void stateTransition(xTimerHandle timer)
         if (!isExperimentRunning()) {
             DEBUG_PRINT("Not running, going home\n");
             random_time_for_next_event_ms = get_next_random_timeout(now_ms);
-            state = STATE_PREPARING_TO_LAND;
+            commanderRelaxPriority();
+            crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
+            stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
+            state = STATE_WAITING_AT_PAD;
         } else {
             DEBUG_PRINT("Running, executing swarmalator\n");
             update_swarmalator(my_id);
@@ -173,24 +194,26 @@ static void stateTransition(xTimerHandle timer)
             setRingSolidColor(hsvToRgb(ledColor));
 
             // Go to the new position
-            DEBUG_PRINT("Going to (%f, %f) in %f seconds\n", (double)getDesiredDeltaX(), (double)getDesiredDeltaY(), (double)getDuration());
-            crtpCommanderHighLevelGoTo2(getDesiredDeltaX(), getDesiredDeltaY(), 0, 0.0f, 0.1f, true, false);
+            // DEBUG_PRINT("Going to (%f, %f) in %f seconds\n", (double)getDesiredVx(), (double)getDesiredVy(), (double)getDuration());
+            // crtpCommanderHighLevelGoTo2(getDesiredDeltaX(), getDesiredDeltaY(), 0, 0.0f, 0.1f, true, false);
+            setVelocitySetpoint(&setpoint, getDesiredVx(), getDesiredVy(), padZ + TAKE_OFF_HEIGHT, 0);
+            commanderSetSetpoint(&setpoint, 3);
         }
         break;
-    case STATE_PREPARING_TO_LAND:
-        // Turn off the LED ring
-        setRingSolidColorRGB(0, 0, 0);
+    // case STATE_PREPARING_TO_LAND:
+    //     // Turn off the LED ring
+    //     setRingSolidColorRGB(0, 0, 0);
 
-        if (isExperimentRunning()) {
-            DEBUG_PRINT("Experiment running, going home\n");
-            state = STATE_HOVERING;
-        } else if (now_ms > random_time_for_next_event_ms) {
-            DEBUG_PRINT("Lowering..\n");
-            crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
-            stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
-            state = STATE_WAITING_AT_PAD;
-        }
-        break;
+    //     if (isExperimentRunning()) {
+    //         DEBUG_PRINT("Experiment running, going home\n");
+    //         state = STATE_HOVERING;
+    //     } else if (now_ms > random_time_for_next_event_ms) {
+    //         DEBUG_PRINT("Lowering..\n");
+    //         crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
+    //         stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
+    //         state = STATE_WAITING_AT_PAD;
+    //     }
+    //     break;
     case STATE_WAITING_AT_PAD:
         if (now_ms > stabilizeEndTime_ms || (fabs((padZ + LANDING_HEIGHT) - getZ()) < MAX_PAD_ERR)) {
             if (now_ms > stabilizeEndTime_ms) {
@@ -234,9 +257,7 @@ void appMain()
         return;
     }
 
-    // Get Crazyflie ID (the last byte of the radio address)
-    uint64_t address = configblockGetRadioAddress();
-    my_id = (uint8_t)((address) & 0x00000000ff);
+    my_id = getMyId();
 
     DEBUG_PRINT("SWARMALATOR PILOT running on %u\n", my_id);
 
