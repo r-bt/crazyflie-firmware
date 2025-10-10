@@ -12,10 +12,15 @@
 #include "p2p_interface.h"
 #include "common.h"
 
+typedef struct {
+    point_t point;
+    vector_t normal;
+} plane_t;
+
 /**
  * @brief Initializes the swarmalator algorithm
  */
-void initSwarmalator(uint8_t my_id);
+void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes);
 
 /**
  * @brief Updates the swarmalator algorithm based on the current state of peer copters

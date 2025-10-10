@@ -16,13 +16,17 @@ float desiredVz = 0.0f; // Desired z velocity
 
 float duration = 0.0f; // Duration of the trajectory
 
-int agents = 3;
+static plane_t **s_boundaryPlanes;
+static int s_numBoundaryPlanes = 0;
 
-void initSwarmalator(uint8_t my_id)
+void initSwarmalator(uint8_t my_id, plane_t** boundaryPlanes, int numBoundaryPlanes)
 {
     swarmalator_params_t* params = getSwarmalatorParams();
 
     phase = params->startingPhase;
+
+    s_boundaryPlanes = boundaryPlanes;
+    s_numBoundaryPlanes = numBoundaryPlanes;
 }
 
 void update_swarmalator(uint8_t my_id)
@@ -53,6 +57,7 @@ void update_swarmalator(uint8_t my_id)
         float v_z_sum = 0.0f;
     #endif
 
+    // Loop over all the other agents
     for (uint8_t i = 0; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
             numActiveCopter++;
@@ -81,13 +86,38 @@ void update_swarmalator(uint8_t my_id)
         }
     }
 
-    if (numActiveCopter > 0) {
-        phase_sum *= params->K / numActiveCopter;
-        v_x_sum /= numActiveCopter;
-        v_y_sum /= numActiveCopter;
+    // Add repulsion from bounding planes
+    for (int i = 0; i < s_numBoundaryPlanes; i++) {
+
+        plane_t* plane = s_boundaryPlanes[i];
+
+        // Compute the distance from agent to the plane
+        #ifdef THREE_D_MODE
+            float distance = (x_pos - plane->point.x) * plane->normal.x + (y_pos - plane->point.y) * plane->normal.y + (z_pos - plane->point.z) * plane->normal.z;
+        #else
+            float distance = (x_pos - plane->point.x) * plane->normal.x + (y_pos - plane->point.y) * plane->normal.y;
+        #endif
+
+        if (distance == 0.0f) {
+            distance = 0.01f; // Avoid division by zero and only repel when outside the boundary
+        }
+
+        v_x_sum += (plane->normal.x / distance) * params->B;
+        v_y_sum += (plane->normal.y / distance) * params->B;
 
         #ifdef THREE_D_MODE
-            v_z_sum /= numActiveCopter;
+            v_z_sum += (plane->normal.z / distance) * params->B;
+        #endif
+
+    }
+
+    if (numActiveCopter > 0) {
+        phase_sum *= params->K / numActiveCopter;
+        v_x_sum /= numActiveCopter + s_numBoundaryPlanes;
+        v_y_sum /= numActiveCopter + s_numBoundaryPlanes;
+
+        #ifdef THREE_D_MODE
+            v_z_sum /= numActiveCopter + s_numBoundaryPlanes;
         #endif
     }
 

@@ -50,6 +50,17 @@ static uint32_t stabilizeEndTime_ms;
 
 static bool isCrashInitialized = false;
 
+// Boundary planes to prevent agents from existing the flight area (i.e. the area that the lighthouse can track them in)
+static plane_t boundaryPlanes[] = {
+    { .point = {0, 0, 0}, .normal = {0, 0, 1} },
+    { .point = {0, 0, 1.5}, .normal = {0, 0, -1} },
+    { .point = {1, 0, 0}, .normal = {1, 0, 0} },
+    { .point = {0, 1, 0}, .normal = {0, 1, 0} },
+    { .point = {-1, 0, 0}, .normal = {-1, 0, 0} },
+    { .point = {0, -1, 0}, .normal = {0, -1, 0} }
+};
+int numBoundaryPlanes = sizeof(boundaryPlanes) / sizeof(boundaryPlanes[0]);
+
 // Timer functions
 
 uint32_t get_next_random_timeout(uint32_t now_ms)
@@ -168,7 +179,7 @@ static void stateTransition(xTimerHandle timer)
         } else if (isExperimentRunning()) {
             DEBUG_PRINT("Entering takeoff queue...\n");
             state = STATE_QUEUED_FOR_TAKE_OFF;
-            initSwarmalator(my_id); // reset swarmalator
+            initSwarmalator(my_id, boundaryPlanes, numBoundaryPlanes); // reset swarmalator
         }
         break;
     case STATE_QUEUED_FOR_TAKE_OFF:
@@ -252,7 +263,7 @@ static void stateTransition(xTimerHandle timer)
             DEBUG_PRINT("Landed\n");
             crtpCommanderHighLevelStop();
             if (supervisorRequestArming(false)) {
-                initSwarmalator(my_id); // reset swarmalator
+                initSwarmalator(my_id, boundaryPlanes, numBoundaryPlanes); // reset swarmalator
                 state = STATE_WAIT_FOR_TAKE_OFF;
             }
         }
