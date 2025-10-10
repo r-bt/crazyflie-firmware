@@ -8,6 +8,7 @@ dependencies = [
     "anywidget>=0.9.18",
     "black>=25.1.0",
     "cfclient>=2025.2",
+    "cfloader>=0.1.4",
     "colorama>=0.4.6",
     "dash>=3.0.1",
     "matplotlib>=3.10.1",

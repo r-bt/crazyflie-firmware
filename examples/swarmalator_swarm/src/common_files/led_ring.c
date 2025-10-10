@@ -6,10 +6,12 @@ static paramVarId_t paramSolidRed;
 static paramVarId_t paramSolidBlue;
 static paramVarId_t paramSolidGreen;
 
-float radians_to_hue(float radians)
+uint8_t radians_to_hue(float radians)
 {
-    return fmod((radians / (2 * (float)M_PI)) * 360.0f, 360.0f);
+    float hue = fmodf((radians / (2.0f * (float)M_PI)) * 255.0f, 255.0f);
+    return (uint8_t)hue;
 }
+
 
 struct RGB hsvToRgb(struct HSV hsv)
 {

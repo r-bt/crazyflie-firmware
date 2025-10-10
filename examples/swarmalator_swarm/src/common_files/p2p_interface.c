@@ -3,7 +3,6 @@
 #include "task.h"
 
 #include "choose_app.h"
-#include "common.h"
 #include "p2p_interface.h"
 #include "settings.h"
 
@@ -16,7 +15,16 @@
 
 // State of peer copters
 copter_full_state_t copters[MAX_ADDRESS];
-swarmalator_params_t swarmalatorParams;
+
+// Swarmalator parameters for this copter
+swarmalator_params_t swarmalatorParams = {
+    .K = 0.0f,
+    .J = 0.0f,
+    .A = 1.0f,
+    .B = 1.0f,
+    .naturalFrequency = 0.0f,
+    .startingPhase = 0.0f
+};
 
 // Swarmalator control parameters
 static uint8_t isRunning = 0;
@@ -25,23 +33,7 @@ static uint32_t controlDataVersion = 0;
 
 // Keeps track of the number of packets sent
 static uint8_t counter = 0;
-
-static void p2pcallbackHandler(P2PPacket* p)
-{
-    DEBUG_PRINT("P2P packet received! Port: %u, Size: %u\n", p->port, p->size);
-
-    switch (p->port) {
-        case P2P_PORT:
-            p2pHandleCopterMessage(p);
-            break;
-        case SWARMALATOR_PARAMS_PORT:
-            p2pHandleSwarmalatorParamsMessage(p);
-            break;
-        default:
-            DEBUG_PRINT("Unknown port %u\n", p->port);
-            break;
-    }
-}
+static uint32_t swarmalatorParamsVersion = 0;
 
 static void p2pHandleCopterMessage(P2PPacket* p)
 {
@@ -100,6 +92,8 @@ static void p2pHandleCopterMessage(P2PPacket* p)
 
 static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
 {
+    DEBUG_PRINT("Received swarmalator params message\n");
+
     static swarmalator_params_message_t rxMessage;
     memcpy(&rxMessage, p->data, sizeof(rxMessage));
 
@@ -116,11 +110,33 @@ static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
         return;
     }
 
+    // Check that this is a new version
+    if (rxMessage.swarmalatorParamsVersion <= swarmalatorParamsVersion) {
+        DEBUG_PRINT("Received old swarmalator params version %lu (current %lu)\n", rxMessage.swarmalatorParamsVersion, swarmalatorParamsVersion);
+        return;
+    }
+
     // Save the swarmalator params
     memcpy(&swarmalatorParams, &rxMessage.swarmalatorParams, sizeof(swarmalator_params_t));
 
-    // Update the swarmalator params counter
-    copters[my_id].swarmalatorParamsCounter++;
+    // Update the swarmalator params version
+    swarmalatorParamsVersion = rxMessage.swarmalatorParamsVersion;
+}
+
+static void p2pcallbackHandler(P2PPacket* p)
+{
+
+    switch (p->port) {
+        case P2P_PORT:
+            p2pHandleCopterMessage(p);
+            break;
+        case SWARMALATOR_PARAMS_PORT:
+            p2pHandleSwarmalatorParamsMessage(p);
+            break;
+        default:
+            DEBUG_PRINT("Unknown port %u\n", p->port);
+            break;
+    }
 }
 
 void initP2P()
@@ -162,13 +178,14 @@ void broadcastToPeers(const copter_full_state_t* state, const uint32_t nowMs)
     counter++;
 }
 
-void broadcastSwarmalatorParams(uint8_t id, const swarmalator_params_t* swarmalatorParams) {
+void broadcastSwarmalatorParams(uint8_t id, uint32_t swarmalatorParamsVersion, const swarmalator_params_t* swarmalatorParams) {
     static P2PPacket packet;
     static swarmalator_params_message_t swarmalatorParamsMessage;
 
     memcpy(&swarmalatorParamsMessage.swarmalatorParams, swarmalatorParams, sizeof(swarmalator_params_t));
     swarmalatorParamsMessage.magicNumber = THE_MAGIC_NUMBER;
     swarmalatorParamsMessage.id = id;
+    swarmalatorParamsMessage.swarmalatorParamsVersion = swarmalatorParamsVersion;
 
     packet.port = SWARMALATOR_PARAMS_PORT;
     memcpy(packet.data, &swarmalatorParamsMessage, sizeof(swarmalator_params_message_t));
@@ -200,7 +217,7 @@ void printPeers(void)
     for (int i = 0; i < MAX_ADDRESS; i++) {
         if (copters[i].state != STATE_UNKNOWN) {
             if (!peerLocalizationIsIDActive(i)) {
-                DEBUG_PRINT("Copter %d is not active\n", i);
+                continue;
             } else {
                 peerLocalizationOtherPosition_t* pos = peerLocalizationGetPositionByID(i);
                 DEBUG_PRINT("Copter %d : %.2f , %.2f , %.2f --> %d with latest counter %d \n", i, (double)pos->pos.x, (double)pos->pos.y, (double)pos->pos.z, copters[i].state, copters[i].counter);
@@ -236,6 +253,14 @@ copter_full_state_t getPeerState(uint8_t id)
     }
 
     return copters[id];
+}
+
+uint32_t getSwarmalatorsParamsVersion(void) {
+    return swarmalatorParamsVersion;
+}
+
+swarmalator_params_t* getSwarmalatorParams(void) {
+    return &swarmalatorParams;
 }
 
 /**

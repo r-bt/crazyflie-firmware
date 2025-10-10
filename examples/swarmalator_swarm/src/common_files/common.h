@@ -9,6 +9,8 @@
  * @date 10/03/2025
  */
 
+#include <stdint.h>
+
 #pragma once
 
 enum State {
@@ -31,3 +33,12 @@ enum State {
 };
 
 uint8_t getMyId(void);
+
+typedef struct {
+    float K;
+    float J;
+    float A;
+    float B;
+    float naturalFrequency;
+    float startingPhase;
+} swarmalator_params_t;

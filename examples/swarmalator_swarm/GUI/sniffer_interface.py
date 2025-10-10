@@ -185,17 +185,21 @@ class SnifferInterface:
         time.sleep(1 / self.REPORT_FREQUENCY)
 
     def check_for_commands(self):
-        # receive commands from the GUI
-
-        # It contains the mapping of command(string) to function to call
-        commands_map = {
-            "toggleIsExperimentRunning": self.toggleIsExperimentRunning,
-        }
-
         try:
             report = self.command_socket.recv_json()
-            function_to_call = commands_map[report["command"]]
-            function_to_call()
+            
+            command = report.get("command", None)
+
+            print(Fore.YELLOW + "Received command: {}".format(command), Fore.RESET)
+            
+            if command == "toggleIsExperimentRunning":
+                self.toggleIsExperimentRunning()
+            elif command == "updateSwarmalatorParameters":
+                params = report["parameters"]
+                agentId = report["droneId"]
+
+                self.updateSwarmalatorParameters(agentId, params)
+                print(Fore.CYAN + "Updated swarmalator parameters for drone {}".format(agentId), Fore.RESET)
 
         except zmq.ZMQError as e:
             if e.errno == zmq.EAGAIN:
@@ -215,6 +219,16 @@ class SnifferInterface:
     def toggleIsExperimentRunning(self):
         self._is_experiment_running = not self._is_experiment_running
         self.cf.param.set_value("app.isExperimentRunning", self._is_experiment_running)
+
+    def updateSwarmalatorParameters(self, agentId, params):
+        if 'K' in params:
+            self.cf.param.set_value("app.{}_K".format(agentId), params['K'])
+        if 'J' in params:
+            self.cf.param.set_value("app.{}_J".format(agentId), params['J'])
+        if 'phase' in params:
+            self.cf.param.set_value("app.{}_phase".format(agentId), params['phase'])
+        if 'naturalFrequency' in params:
+            self.cf.param.set_value("app.{}_naturalFrequency".format(agentId), params['naturalFrequency'])
 
 
 class snifferThread(threading.Thread):

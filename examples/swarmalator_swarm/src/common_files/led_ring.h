@@ -29,7 +29,7 @@ struct HSV {
  * @param radians The angle in radians
  * @return The corresponding hue value (0-255)
  */
-float radians_to_hue(float radians);
+uint8_t radians_to_hue(float radians);
 
 /**
  * Convert an HSV color to an RGB color

@@ -5,34 +5,30 @@
 
 static uint32_t prevUpdate_ms = 0;
 
-/**
- * Swarmalator parameters
- */
-float K = 1.0f; // Phase synchronization strength
-float J = 1.0f; // Like-attracts-like strength
-float A = 1.0f; // Attraction strength
-float B = 1.0f; // Repulsion strength
-
-float naturalFrequency = 1.0f;
 float phase = 0.0f; // Phase of the copter (radians)
 
 float desiredVx = 0.0f; // Desired x velocity
 float desiredVy = 0.0f; // Desired y velocity
+
+#ifdef THREE_D_MODE
+float desiredVz = 0.0f; // Desired z velocity
+#endif
+
 float duration = 0.0f; // Duration of the trajectory
 
 int agents = 3;
 
 void initSwarmalator(uint8_t my_id)
 {
-    int pos = (my_id - 1);
+    swarmalator_params_t* params = getSwarmalatorParams();
 
-    // Linspace between 0 and 2*pi
-    float phaseStep = (2.0f * (float)M_PI) / agents;
-    phase = pos * phaseStep;
+    phase = params->startingPhase;
 }
 
 void update_swarmalator(uint8_t my_id)
 {
+
+    swarmalator_params_t* params = getSwarmalatorParams();
 
     if (prevUpdate_ms == 0) {
         prevUpdate_ms = T2M(xTaskGetTickCount());
@@ -52,6 +48,11 @@ void update_swarmalator(uint8_t my_id)
     float v_x_sum = 0.0f;
     float v_y_sum = 0.0f;
 
+    #ifdef THREE_D_MODE
+        float z_pos = getZ();
+        float v_z_sum = 0.0f;
+    #endif
+
     for (uint8_t i = 0; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
             numActiveCopter++;
@@ -59,25 +60,38 @@ void update_swarmalator(uint8_t my_id)
             copter_full_state_t peer = getPeerState(i);
 
             float thetaDiff = peer.phase - phase;
-            float distance = sqrtf(powf(peer.position.x - x_pos, 2) + powf(peer.position.y - y_pos, 2));
+
+            #ifdef THREE_D_MODE
+                float distance = sqrtf(powf(peer.position.x - x_pos, 2) + powf(peer.position.y - y_pos, 2) + powf(peer.position.z - z_pos, 2));
+            #else
+                float distance = sqrtf(powf(peer.position.x - x_pos, 2) + powf(peer.position.y - y_pos, 2));
+            #endif
 
             if (distance == 0.0f) {
                 distance = 0.01f; // Avoid division by zero
             }
 
             phase_sum += (sinf(thetaDiff) / distance);
-            v_x_sum += ((peer.position.x - x_pos) / distance) * (A + J * cosf(thetaDiff)) - (B * (peer.position.x - x_pos) / (distance * distance));
-            v_y_sum += ((peer.position.y - y_pos) / distance) * (A + J * cosf(thetaDiff)) - (B * (peer.position.y - y_pos) / (distance * distance));
+            v_x_sum += ((peer.position.x - x_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.x - x_pos) / (distance * distance));
+            v_y_sum += ((peer.position.y - y_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.y - y_pos) / (distance * distance));
+
+            #ifdef THREE_D_MODE
+                v_z_sum += ((peer.position.z - z_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.z - z_pos) / (distance * distance));
+            #endif
         }
     }
 
     if (numActiveCopter > 0) {
-        phase_sum *= K / numActiveCopter;
+        phase_sum *= params->K / numActiveCopter;
         v_x_sum /= numActiveCopter;
         v_y_sum /= numActiveCopter;
+
+        #ifdef THREE_D_MODE
+            v_z_sum /= numActiveCopter;
+        #endif
     }
 
-    phase += (naturalFrequency + phase_sum) * ((T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f);
+    phase += (params->naturalFrequency + phase_sum) * ((T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f);
 
     // Normalize the phase to [0, 2*pi]
     if (phase > 2.0f * (float)M_PI) {
@@ -89,6 +103,11 @@ void update_swarmalator(uint8_t my_id)
     // Update the desired position based on the velocity
     desiredVx = v_x_sum;
     desiredVy = v_y_sum;
+
+    #ifdef THREE_D_MODE
+        desiredVz = v_z_sum;
+    #endif
+
     duration = (T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f;
 
     prevUpdate_ms = T2M(xTaskGetTickCount());
@@ -108,6 +127,13 @@ float getDesiredVy()
 {
     return desiredVy;
 }
+
+#ifdef THREE_D_MODE
+float getDesiredVz()
+{
+    return desiredVz;
+}
+#endif
 
 float getDuration()
 {

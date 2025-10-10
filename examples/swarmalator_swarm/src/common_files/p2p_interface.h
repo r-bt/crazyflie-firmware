@@ -6,6 +6,7 @@
 #include "peer_localization.h"
 #include "positions.h"
 #include "radiolink.h"
+#include "common.h"
 
 typedef struct {
     // State
@@ -16,7 +17,7 @@ typedef struct {
     uint32_t timestamp;
     Position position;
     float phase;
-    uint8_t swarmalatorParamsCounter;
+    uint32_t swarmalatorParamsVersion;
 } copter_full_state_t;
 
 typedef struct {
@@ -32,8 +33,9 @@ typedef struct {
 } copter_message_t;
 
 typedef struct {
-    unit32_t magicNumber;
+    uint32_t magicNumber;
     uint8_t id;
+    uint32_t swarmalatorParamsVersion;
     swarmalator_params_t swarmalatorParams;
 
 } swarmalator_params_message_t;
@@ -52,6 +54,13 @@ void initP2P();
  * @param nowMs The current time in ms
  */
 void broadcastToPeers(const copter_full_state_t* state, const uint32_t nowMs);
+
+/**
+ * Broadcast swarmalator params for a specific drone
+ * 
+ * Note broadcasts to all drones but drones check if id in packet matches their id
+ */
+void broadcastSwarmalatorParams(uint8_t id, uint32_t swarmalatorParamsVersion, const swarmalator_params_t* swarmalatorParams);
 
 /**
  * Compress the voltage to a uint8_t value between 0 and 255
@@ -87,6 +96,8 @@ bool isExperimentRunning(void);
  */
 void setIsRunning(uint8_t isRunningVal);
 
+uint32_t getSwarmalatorsParamsVersion(void);
+
 /**
  * Get's the state of a peer
  *
@@ -94,5 +105,12 @@ void setIsRunning(uint8_t isRunningVal);
  * @return The state of the peer
  */
 copter_full_state_t getPeerState(uint8_t id);
+
+/**
+ * Get's the swarmalator parameters of this copter
+ *
+ * @return Pointer to the swarmalator parameters
+ */
+swarmalator_params_t* getSwarmalatorParams(void);
 
 #endif // P2P_INTERFACE_H

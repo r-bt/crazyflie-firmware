@@ -60,19 +60,35 @@ uint32_t get_next_random_timeout(uint32_t now_ms)
     return timeout;
 }
 
-static void setVelocitySetpoint(setpoint_t *setpoint, float vx, float vy, float z, float yawrate)
-{
-  setpoint->mode.z = modeAbs;
-  setpoint->position.z = z;
-  setpoint->mode.yaw = modeVelocity;
-  setpoint->attitudeRate.yaw = yawrate;
-  setpoint->mode.x = modeVelocity;
-  setpoint->mode.y = modeVelocity;
-  setpoint->velocity.x = vx;
-  setpoint->velocity.y = vy;
+#ifdef THREE_D_MODE
+    static void setVelocitySetpoint3D(setpoint_t *setpoint, float vx, float vy, float vz, float yawrate)
+    {
+        setpoint->mode.z = modeVelocity;
+        setpoint->velocity.z = vz;
+        setpoint->mode.yaw = modeVelocity;
+        setpoint->attitudeRate.yaw = yawrate;
+        setpoint->mode.x = modeVelocity;
+        setpoint->mode.y = modeVelocity;
+        setpoint->velocity.x = vx;
+        setpoint->velocity.y = vy;
 
-  setpoint->velocity_body = false;
-}
+        setpoint->velocity_body = false;
+    }
+#else
+    static void setVelocitySetpoint2D(setpoint_t *setpoint, float vx, float vy, float z, float yawrate)
+    {
+        setpoint->mode.z = modeAbs;
+        setpoint->position.z = z;
+        setpoint->mode.yaw = modeVelocity;
+        setpoint->attitudeRate.yaw = yawrate;
+        setpoint->mode.x = modeVelocity;
+        setpoint->mode.y = modeVelocity;
+        setpoint->velocity.x = vx;
+        setpoint->velocity.y = vy;
+
+        setpoint->velocity_body = false;
+    }
+#endif
 
 static void broadcastData(xTimerHandle timer)
 {
@@ -89,6 +105,9 @@ static void broadcastData(xTimerHandle timer)
     fullState.position.y = getY();
     fullState.position.z = getZ();
     fullState.phase = getPhase();
+    fullState.swarmalatorParamsVersion = getSwarmalatorsParamsVersion();
+
+    DEBUG_PRINT("My swarmalator params version: %lu\n", fullState.swarmalatorParamsVersion);
 
     broadcastToPeers(&fullState, nowMs);
 }
@@ -115,8 +134,6 @@ static void startTakeOffSequence()
 
 static void stateTransition(xTimerHandle timer)
 {
-    DEBUG_PRINT("State is %u\n", state);
-
     setpoint_t setpoint;
 
     if (supervisorIsTumbled()) {
@@ -151,6 +168,7 @@ static void stateTransition(xTimerHandle timer)
         } else if (isExperimentRunning()) {
             DEBUG_PRINT("Entering takeoff queue...\n");
             state = STATE_QUEUED_FOR_TAKE_OFF;
+            initSwarmalator(my_id); // reset swarmalator
         }
         break;
     case STATE_QUEUED_FOR_TAKE_OFF:
@@ -196,7 +214,11 @@ static void stateTransition(xTimerHandle timer)
             // Go to the new position
             // DEBUG_PRINT("Going to (%f, %f) in %f seconds\n", (double)getDesiredVx(), (double)getDesiredVy(), (double)getDuration());
             // crtpCommanderHighLevelGoTo2(getDesiredDeltaX(), getDesiredDeltaY(), 0, 0.0f, 0.1f, true, false);
-            setVelocitySetpoint(&setpoint, getDesiredVx(), getDesiredVy(), padZ + TAKE_OFF_HEIGHT, 0);
+            #ifdef THREE_D_MODE
+                setVelocitySetpoint3D(&setpoint, getDesiredVx(), getDesiredVy(), getDesiredVz(), 0);
+            #else
+                setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), padZ + TAKE_OFF_HEIGHT, 0);
+            #endif
             commanderSetSetpoint(&setpoint, 3);
         }
         break;
@@ -270,9 +292,6 @@ void appMain()
 
     // Init the LED ring
     initLedRing();
-
-    // Init swarmalator
-    initSwarmalator(my_id);
 
     // Create timer to send position state to other Crazyflies
     sendPosTimer = xTimerCreate("SendPosTimer", M2T(BROADCAST_PERIOD_MS), pdTRUE, NULL, broadcastData);
