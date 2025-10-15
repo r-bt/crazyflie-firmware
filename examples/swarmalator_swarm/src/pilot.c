@@ -138,7 +138,7 @@ static void startTakeOffSequence()
     DEBUG_PRINT("Base position: (%f, %f, %f)\n", (double)padX, (double)padY, (double)padZ);
 
     DEBUG_PRINT("Taking off...\n");
-    crtpCommanderHighLevelTakeoff(padZ + TAKE_OFF_HEIGHT, 1.0);
+    crtpCommanderHighLevelTakeoff(TAKE_OFF_HEIGHT, 1.0);
 }
 
 static void stateTransition(xTimerHandle timer)
@@ -225,7 +225,7 @@ static void stateTransition(xTimerHandle timer)
             #ifdef THREE_D_MODE
                 setVelocitySetpoint3D(&setpoint, getDesiredVx(), getDesiredVy(), getDesiredVz(), 0);
             #else
-                setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), padZ + TAKE_OFF_HEIGHT, 0);
+                setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), TAKE_OFF_HEIGHT, 0);
             #endif
             commanderSetSetpoint(&setpoint, 3);
         }
