@@ -52,12 +52,12 @@ static bool isCrashInitialized = false;
 
 // Boundary planes to prevent agents from existing the flight area (i.e. the area that the lighthouse can track them in)
 static plane_t boundaryPlanes[] = {
-    { .point = {0, 0, 0}, .normal = {0, 0, 1} },
-    { .point = {0, 0, 1.5}, .normal = {0, 0, -1} },
-    { .point = {1, 0, 0}, .normal = {1, 0, 0} },
-    { .point = {0, 1, 0}, .normal = {0, 1, 0} },
-    { .point = {-1, 0, 0}, .normal = {-1, 0, 0} },
-    { .point = {0, -1, 0}, .normal = {0, -1, 0} }
+    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1} },
+    { .point = {.x = 0, .y = 0, .z = 1.8}, .normal = {.x = 0, .y = 0, .z = -1} },
+    { .point = {.x = 1.5, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0} },
+    { .point = {.x = -1.5, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0} },
+    { .point = {.x = 0, .y = 1.5, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0} },
+    { .point = {.x = 0, .y = -1.5, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0} }
 };
 int numBoundaryPlanes = sizeof(boundaryPlanes) / sizeof(boundaryPlanes[0]);
 
@@ -117,8 +117,6 @@ static void broadcastData(xTimerHandle timer)
     fullState.position.z = getZ();
     fullState.phase = getPhase();
     fullState.swarmalatorParamsVersion = getSwarmalatorsParamsVersion();
-
-    DEBUG_PRINT("My swarmalator params version: %lu\n", fullState.swarmalatorParamsVersion);
 
     broadcastToPeers(&fullState, nowMs);
 }
@@ -215,7 +213,6 @@ static void stateTransition(xTimerHandle timer)
             stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
             state = STATE_WAITING_AT_PAD;
         } else {
-            DEBUG_PRINT("Running, executing swarmalator\n");
             update_swarmalator(my_id);
 
             // Update the phase

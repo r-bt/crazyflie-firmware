@@ -36,4 +36,4 @@
 #define STABILIZE_TIMEOUT 4000 // ms
 #define MAX_PAD_ERR 0.01
 
-#define THREE_D_MODE 1 // Set to 1 to enable 3D mode, 0 for 2D mode
+// #define THREE_D_MODE 1 // Set to 1 to enable 3D mode, 0 for 2D mode

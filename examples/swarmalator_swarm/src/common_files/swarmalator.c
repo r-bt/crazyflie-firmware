@@ -2,6 +2,9 @@
 #include "p2p_interface.h"
 #include "param_log_interface.h"
 #include "settings.h"
+#include "debug.h"
+
+#define DEBUG_MODULE "SWARMALATOR"
 
 static uint32_t prevUpdate_ms = 0;
 
@@ -16,10 +19,10 @@ float desiredVz = 0.0f; // Desired z velocity
 
 float duration = 0.0f; // Duration of the trajectory
 
-static plane_t **s_boundaryPlanes;
+static plane_t *s_boundaryPlanes;
 static int s_numBoundaryPlanes = 0;
 
-void initSwarmalator(uint8_t my_id, plane_t** boundaryPlanes, int numBoundaryPlanes)
+void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes)
 {
     swarmalator_params_t* params = getSwarmalatorParams();
 
@@ -57,8 +60,8 @@ void update_swarmalator(uint8_t my_id)
         float v_z_sum = 0.0f;
     #endif
 
-    // Loop over all the other agents
-    for (uint8_t i = 0; i < MAX_ADDRESS; i++) {
+    // Loop over all the other agents (note start at 1 since we don't include the tower)
+    for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
             numActiveCopter++;
 
@@ -89,24 +92,24 @@ void update_swarmalator(uint8_t my_id)
     // Add repulsion from bounding planes
     for (int i = 0; i < s_numBoundaryPlanes; i++) {
 
-        plane_t* plane = s_boundaryPlanes[i];
+        plane_t plane = s_boundaryPlanes[i];
 
         // Compute the distance from agent to the plane
         #ifdef THREE_D_MODE
-            float distance = (x_pos - plane->point.x) * plane->normal.x + (y_pos - plane->point.y) * plane->normal.y + (z_pos - plane->point.z) * plane->normal.z;
+            float distance = (x_pos - plane.point.x) * plane.normal.x + (y_pos - plane.point.y) * plane.normal.y + (z_pos - plane.point.z) * plane.normal.z;
         #else
-            float distance = (x_pos - plane->point.x) * plane->normal.x + (y_pos - plane->point.y) * plane->normal.y;
+            float distance = (x_pos - plane.point.x) * plane.normal.x + (y_pos - plane.point.y) * plane.normal.y;
         #endif
 
         if (distance == 0.0f) {
             distance = 0.01f; // Avoid division by zero and only repel when outside the boundary
         }
 
-        v_x_sum += (plane->normal.x / distance) * params->B;
-        v_y_sum += (plane->normal.y / distance) * params->B;
+        v_x_sum += (plane.normal.x / distance) * params->B;
+        v_y_sum += (plane.normal.y / distance) * params->B;
 
         #ifdef THREE_D_MODE
-            v_z_sum += (plane->normal.z / distance) * params->B;
+            v_z_sum += (plane.normal.z / distance) * params->B;
         #endif
 
     }
