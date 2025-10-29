@@ -9,7 +9,7 @@
 
 #pragma once
 
-#define MAX_ADDRESS 10 // all copter addresses must be between 0 and max(MAX_ADDRESS,9)
+#define MAX_ADDRESS 11 // all copter addresses must be between 0 and max(MAX_ADDRESS,9)
 
 #define BROADCAST_FREQUENCY_HZ 10
 #define BROADCAST_PERIOD_MS (1000 / BROADCAST_FREQUENCY_HZ)
@@ -20,7 +20,7 @@
 #define CALC_NEXT_FREQUENCY_HZ 3
 #define CALC_NEXT_PERIOD_MS (1000 / CALC_NEXT_FREQUENCY_HZ)
 
-#define VOLTAGE_MIN 3.0f
+#define VOLTAGE_MIN 3.5f
 #define VOLTAGE_MAX 4.2f
 
 #define NUMBER_OF_PAD_SAMPLES 10 // number of samples to take to estimate the landing pad
@@ -31,9 +31,11 @@
 #define TAKE_OFF_TIME_MIN 500
 
 #define GO_TO_PAD_DURATION 4.0f // sec duration to go to charging pad
-#define LANDING_HEIGHT 0.25f
+#define LANDING_HEIGHT 0.15f
 #define LANDING_DURATION 1.0f // sec
 #define STABILIZE_TIMEOUT 4000 // ms
 #define MAX_PAD_ERR 0.01
 
-// #define THREE_D_MODE 1 // Set to 1 to enable 3D mode, 0 for 2D mode
+#define THREE_D_MODE 1 // Set to 1 to enable 3D mode, 0 for 2D mode
+
+#define PLANE_INFLECTION_DISTANCE 0.2f // Distance from boundary plane at which repulsion becomes exponential (i.e. equation is 1/d**2 and we don't want to get )

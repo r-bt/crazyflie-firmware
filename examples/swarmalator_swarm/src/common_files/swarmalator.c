@@ -22,6 +22,11 @@ float duration = 0.0f; // Duration of the trajectory
 static plane_t *s_boundaryPlanes;
 static int s_numBoundaryPlanes = 0;
 
+bool isTargetSet = false;
+float target[3] = { 1.0f, 1.0f, 0.75f};
+
+float alpha = 1.0f; // Weighting factor for J1
+
 void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes)
 {
     swarmalator_params_t* params = getSwarmalatorParams();
@@ -32,9 +37,36 @@ void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlan
     s_numBoundaryPlanes = numBoundaryPlanes;
 }
 
+float getJ1Value(int my_id, float xPos, float yPos, float zPos) {
+
+    float distToTarget = sqrtf(powf(target[0] - xPos, 2) + powf(target[1] - yPos, 2) + powf(target[2] - zPos, 2));
+    float minDist = distToTarget;
+    float maxDist = distToTarget;
+
+    for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
+        if (i != my_id && peerLocalizationIsIDActive(i)) {
+            copter_full_state_t peer = getPeerState(i);
+
+            float distance = sqrtf(powf(target[0] - peer.position.x, 2) + powf(target[1] - peer.position.y, 2) + powf(target[2] - peer.position.z, 2));
+
+            if (distance < minDist) {
+                minDist = distance;
+            }
+            if (distance > maxDist) {
+                maxDist = distance;
+            }
+        }
+    }
+
+    float J_val = alpha * fabsf((distToTarget - minDist) / (maxDist - minDist));
+
+    DEBUG_PRINT("J1 Value: %f, Dist to Target: %f, Min Dist: %f, Max Dist: %f\n", (double)J_val, (double)distToTarget, (double)minDist, (double)maxDist);
+
+    return J_val;
+}
+
 void update_swarmalator(uint8_t my_id)
 {
-
     swarmalator_params_t* params = getSwarmalatorParams();
 
     if (prevUpdate_ms == 0) {
@@ -60,6 +92,8 @@ void update_swarmalator(uint8_t my_id)
         float v_z_sum = 0.0f;
     #endif
 
+    float J = isTargetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
+
     // Loop over all the other agents (note start at 1 since we don't include the tower)
     for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
@@ -80,16 +114,33 @@ void update_swarmalator(uint8_t my_id)
             }
 
             phase_sum += (sinf(thetaDiff) / distance);
-            v_x_sum += ((peer.position.x - x_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.x - x_pos) / (distance * distance));
-            v_y_sum += ((peer.position.y - y_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.y - y_pos) / (distance * distance));
+            v_x_sum += ((peer.position.x - x_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.x - x_pos) / (distance * distance));
+            v_y_sum += ((peer.position.y - y_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.y - y_pos) / (distance * distance));
 
             #ifdef THREE_D_MODE
-                v_z_sum += ((peer.position.z - z_pos) / distance) * (params->A + params->J * cosf(thetaDiff)) - (params->B * (peer.position.z - z_pos) / (distance * distance));
+                v_z_sum += ((peer.position.z - z_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.z - z_pos) / (distance * distance));
             #endif
         }
     }
 
+    if (numActiveCopter > 0) {
+        phase_sum *= params->K / numActiveCopter;
+        v_x_sum /= numActiveCopter;
+        v_y_sum /= numActiveCopter;
+
+        #ifdef THREE_D_MODE
+            v_z_sum /= numActiveCopter;
+        #endif
+    }
+
     // Add repulsion from bounding planes
+    float plane_v_x_sum = 0.0f;
+    float plane_v_y_sum = 0.0f;
+
+    #ifdef THREE_D_MODE
+        float plane_v_z_sum = 0.0f;
+    #endif
+
     for (int i = 0; i < s_numBoundaryPlanes; i++) {
 
         plane_t plane = s_boundaryPlanes[i];
@@ -102,27 +153,24 @@ void update_swarmalator(uint8_t my_id)
         #endif
 
         if (distance == 0.0f) {
-            distance = 0.01f; // Avoid division by zero and only repel when outside the boundary
+            distance = 0.01f; // Avoid division by zero
         }
 
-        v_x_sum += (plane.normal.x / distance) * params->B;
-        v_y_sum += (plane.normal.y / distance) * params->B;
+        distance += (1 - PLANE_INFLECTION_DISTANCE); // Shift the distance so that repulsion becomes exponential at the inflection distance
+
+        plane_v_x_sum += ((plane.normal.x / distance * distance) * params->B);
+        plane_v_y_sum += ((plane.normal.y / distance * distance) * params->B);
 
         #ifdef THREE_D_MODE
-            v_z_sum += (plane.normal.z / distance) * params->B;
-        #endif
-
-    }
-
-    if (numActiveCopter > 0) {
-        phase_sum *= params->K / numActiveCopter;
-        v_x_sum /= numActiveCopter + s_numBoundaryPlanes;
-        v_y_sum /= numActiveCopter + s_numBoundaryPlanes;
-
-        #ifdef THREE_D_MODE
-            v_z_sum /= numActiveCopter + s_numBoundaryPlanes;
+            plane_v_z_sum += ((plane.normal.z / (distance * distance)) * params->B);
         #endif
     }
+
+    v_x_sum += plane_v_x_sum / s_numBoundaryPlanes;
+    v_y_sum += plane_v_y_sum / s_numBoundaryPlanes;
+    #ifdef THREE_D_MODE
+        v_z_sum += plane_v_z_sum / s_numBoundaryPlanes;
+    #endif
 
     phase += (params->naturalFrequency + phase_sum) * ((T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f);
 

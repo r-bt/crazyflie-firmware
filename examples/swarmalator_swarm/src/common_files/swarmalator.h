@@ -63,3 +63,10 @@ float getDuration();
  * @return The current phase of the Crazyflie (in radians)
  */
 float getPhase();
+
+/**
+ * @brief Calculates J1 value based off target location
+ * 
+ * @return J1 value
+ */
+float getJ1Value(int my_id, float xPos, float yPos, float zPos);

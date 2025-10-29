@@ -1,5 +1,4 @@
-MAX_COPTERS = 9
-
+MAX_COPTERS = 10
 
 class State:
     STATE_IDLE = 0

@@ -43,9 +43,11 @@ class Copter:
 
 
 class SnifferInterface:
-    REPORT_FREQUENCY = 2  # Hz
-    LOG_FREQUENCY = 4  # Hz
-    LOG_ACTIONS_FREQUENCY = 4  # Hz
+    REPORT_FREQUENCY = 20  # Hz
+    # Request these at 20 Hz (period = 50 ms). Note: increasing this increases
+    # radio/log bandwidth. If you run many copters you may hit throughput limits.
+    LOG_FREQUENCY = 20  # Hz
+    LOG_ACTIONS_FREQUENCY = 20  # Hz
 
     def __init__(
         self, uri, report_socket: zmq.Socket = None, command_socket: zmq.Socket = None
@@ -103,9 +105,9 @@ class SnifferInterface:
 
     def _setup_logging(self):
         for i in range(MAX_COPTERS):
-            log_conf = LogConfig(
-                name="{}-Conf".format(i), period_in_ms=1 / self.LOG_FREQUENCY * 1000
-            )
+            # Use integer milliseconds for the LogConfig period
+            period_ms = int(1000 / self.LOG_FREQUENCY)
+            log_conf = LogConfig(name="{}-Conf".format(i), period_in_ms=period_ms)
 
             log_conf.add_variable("id_{}.state".format(i + 1), "uint8_t")
             log_conf.add_variable("id_{}.voltage".format(i + 1), "uint8_t")

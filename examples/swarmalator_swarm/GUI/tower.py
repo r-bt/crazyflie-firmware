@@ -10,6 +10,7 @@ import threading
 import zmq
 import math
 from typing import List, Dict
+import random
 
 # PyQt imports
 from PyQt6.QtWidgets import (
@@ -231,6 +232,34 @@ class SwarmControlTower(QMainWindow):
         
         quickset_layout.addLayout(freq_layout)
         
+        # K parameter setup buttons
+        k_layout = QHBoxLayout()
+        k_layout.addWidget(QLabel("K Setup:"))
+        
+        k_zero_btn = QPushButton("All 0")
+        k_zero_btn.clicked.connect(self.set_all_k_zero)
+        k_layout.addWidget(k_zero_btn)
+        
+        k_one_btn = QPushButton("All 1")
+        k_one_btn.clicked.connect(self.set_all_k_one)
+        k_layout.addWidget(k_one_btn)
+        
+        quickset_layout.addLayout(k_layout)
+        
+        # J parameter setup buttons
+        j_layout = QHBoxLayout()
+        j_layout.addWidget(QLabel("J Setup:"))
+        
+        j_zero_btn = QPushButton("All 0")
+        j_zero_btn.clicked.connect(self.set_all_j_zero)
+        j_layout.addWidget(j_zero_btn)
+        
+        j_one_btn = QPushButton("All 1")
+        j_one_btn.clicked.connect(self.set_all_j_one)
+        j_layout.addWidget(j_one_btn)
+        
+        quickset_layout.addLayout(j_layout)
+        
         quickset_group.setLayout(quickset_layout)
         layout.addWidget(quickset_group)
         
@@ -340,8 +369,7 @@ class SwarmControlTower(QMainWindow):
             # Check for timeouts
             current_time = time.time()
             for i in range(MAX_COPTERS):
-                if (current_time - last_updated[i] > COPTER_ALIVE_TIMEOUT and 
-                    i != 8):  # Skip drone 9 (index 8) as noted in original code
+                if (current_time - last_updated[i] > COPTER_ALIVE_TIMEOUT):  # Skip drone 9 (index 8) as noted in original code
                     
                     timeout_data = {
                         "id": i + 1,
@@ -552,29 +580,25 @@ class SwarmControlTower(QMainWindow):
     
     def set_linear_phases(self):
         """Set phases linearly spaced across all active drones"""
-        active_drones = []
-        
-        # Find active drones (assuming drones with ID > 0 are active)
-        for i, widget in enumerate(self.drone_widgets):
-            if widget.is_active:
-                active_drones.append((i, widget))
+        active_drones = [(i, w) for i, w in enumerate(self.drone_widgets) if w.is_active]
+
+        random.shuffle(active_drones)
         
         if not active_drones:
             QMessageBox.warning(self, "No Drones", "No active drones found!")
             return
         
-        # Calculate linear spacing: 0 to 2π
-        num_drones = len(active_drones)
-        phase_step = (2.0 * math.pi) / num_drones
-        
-        for idx, (drone_idx, widget) in enumerate(active_drones):
-            phase = idx * phase_step
+        num = len(active_drones)
+        if num == 1:
+            phase_values = [0.0]
+        else:
+            phase_values = [(2.0 * math.pi * i) / (num) for i in range(num)]
+
+        for (phase, (_, widget)) in zip(phase_values, active_drones):
             params = {'phase': phase}
             widget.set_parameters(params)
             self.send_parameters_to_drone(widget.drone_id, params)
-        
-        QMessageBox.information(self, "Success", f"Set linear phases for {num_drones} drones")
-    
+
     def set_all_freq_zero(self):
         """Set all drone natural frequencies to 0"""
         self._set_all_frequencies(0.0)
@@ -585,12 +609,9 @@ class SwarmControlTower(QMainWindow):
     
     def set_half_freq_split(self):
         """Set half drones to +1 and half to -1 natural frequency"""
-        active_drones = []
-        
-        # Find active drones
-        for i, widget in enumerate(self.drone_widgets):
-            if widget.is_active:
-                active_drones.append((i, widget))
+        active_drones = [(i, w) for i, w in enumerate(self.drone_widgets) if w.is_active]
+
+        random.shuffle(active_drones)
         
         if not active_drones:
             QMessageBox.warning(self, "No Drones", "No active drones found!")
@@ -604,9 +625,6 @@ class SwarmControlTower(QMainWindow):
             params = {'naturalFrequency': freq}
             widget.set_parameters(params)
             self.send_parameters_to_drone(widget.drone_id, params)
-        
-        QMessageBox.information(self, "Success", 
-                               f"Set {half_point} drones to +1 and {num_drones - half_point} drones to -1")
     
     def _set_all_frequencies(self, frequency: float):
         """Helper method to set all drone frequencies to a specific value"""
@@ -617,9 +635,42 @@ class SwarmControlTower(QMainWindow):
                 widget.set_parameters(params)
                 self.send_parameters_to_drone(widget.drone_id, params)
                 count += 1
-        
-        QMessageBox.information(self, "Success", 
-                               f"Set natural frequency to {frequency} for {count} drones")
+    
+    def set_all_k_zero(self):
+        """Set all drone K parameters to 0"""
+        self._set_all_k(0.0)
+    
+    def set_all_k_one(self):
+        """Set all drone K parameters to 1"""
+        self._set_all_k(1.0)
+    
+    def _set_all_k(self, k_value: float):
+        """Helper method to set all drone K parameters to a specific value"""
+        count = 0
+        for widget in self.drone_widgets:
+            if widget.is_active:
+                params = {'K': k_value}
+                widget.set_parameters(params)
+                self.send_parameters_to_drone(widget.drone_id, params)
+                count += 1
+    
+    def set_all_j_zero(self):
+        """Set all drone J parameters to 0"""
+        self._set_all_j(0.0)
+    
+    def set_all_j_one(self):
+        """Set all drone J parameters to 1"""
+        self._set_all_j(1.0)
+    
+    def _set_all_j(self, j_value: float):
+        """Helper method to set all drone J parameters to a specific value"""
+        count = 0
+        for widget in self.drone_widgets:
+            if widget.is_active:
+                params = {'J': j_value}
+                widget.set_parameters(params)
+                self.send_parameters_to_drone(widget.drone_id, params)
+                count += 1
             
     def closeEvent(self, event):
         """Handle application close"""

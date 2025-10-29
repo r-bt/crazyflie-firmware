@@ -92,8 +92,6 @@ static void p2pHandleCopterMessage(P2PPacket* p)
 
 static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
 {
-    DEBUG_PRINT("Received swarmalator params message\n");
-
     static swarmalator_params_message_t rxMessage;
     memcpy(&rxMessage, p->data, sizeof(rxMessage));
 
@@ -287,3 +285,4 @@ add_copter_log(6)
 add_copter_log(7)
 add_copter_log(8)
 add_copter_log(9)
+add_copter_log(10)

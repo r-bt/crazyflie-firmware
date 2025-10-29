@@ -208,10 +208,11 @@ static void stateTransition(xTimerHandle timer)
         if (!isExperimentRunning()) {
             DEBUG_PRINT("Not running, going home\n");
             random_time_for_next_event_ms = get_next_random_timeout(now_ms);
-            commanderRelaxPriority();
-            crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
             stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
-            state = STATE_WAITING_AT_PAD;
+            state = STATE_PREPARING_TO_LAND;
+
+            commanderRelaxPriority();
+            crtpCommanderHighLevelGoTo2(getX(), getY(), getZ(), 0.0f, 1.0f, false, true); // stay in place
         } else {
             update_swarmalator(my_id);
 
@@ -230,20 +231,22 @@ static void stateTransition(xTimerHandle timer)
             commanderSetSetpoint(&setpoint, 3);
         }
         break;
-    // case STATE_PREPARING_TO_LAND:
-    //     // Turn off the LED ring
-    //     setRingSolidColorRGB(0, 0, 0);
+    case STATE_PREPARING_TO_LAND:
+        // Turn off the LED ring
+        if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+            setRingSolidColorRGB(0, 0, 0);
+            crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
 
-    //     if (isExperimentRunning()) {
-    //         DEBUG_PRINT("Experiment running, going home\n");
-    //         state = STATE_HOVERING;
-    //     } else if (now_ms > random_time_for_next_event_ms) {
-    //         DEBUG_PRINT("Lowering..\n");
-    //         crtpCommanderHighLevelLand(padZ + LANDING_HEIGHT, GO_TO_PAD_DURATION);
-    //         stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
-    //         state = STATE_WAITING_AT_PAD;
-    //     }
-    //     break;
+            state = STATE_GOING_HOME;
+        }
+        break;
+    case STATE_GOING_HOME:
+        if (crtpCommanderHighLevelIsTrajectoryFinished()) {
+            DEBUG_PRINT("Over pad, stabilizing position\n");
+            stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
+            state = STATE_WAITING_AT_PAD;
+        }
+        break;
     case STATE_WAITING_AT_PAD:
         if (now_ms > stabilizeEndTime_ms || (fabs((padZ + LANDING_HEIGHT) - getZ()) < MAX_PAD_ERR)) {
             if (now_ms > stabilizeEndTime_ms) {
