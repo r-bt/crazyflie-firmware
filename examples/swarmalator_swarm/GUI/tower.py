@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QCheckBox,
     QSplitter, QMessageBox, QGroupBox, QSlider,
-    QFileDialog, QScrollArea
+    QFileDialog, QScrollArea, QDoubleSpinBox
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont
@@ -52,6 +52,10 @@ class SwarmControlTower(QMainWindow):
         self.recorder = ExperimentRecorder()
         self.experiment_running = False
         
+        # Buffered drone data for efficient batch updates
+        self.drone_data_buffer = {}
+        self.buffer_lock = threading.Lock()
+        
         # ZMQ setup
         self._setup_zmq()
         
@@ -60,6 +64,12 @@ class SwarmControlTower(QMainWindow):
         
         # Start background threads
         self._start_threads()
+        
+        # Set up visualization update timer (30 FPS for smooth but efficient rendering)
+        self.viz_timer = QTimer()
+        self.viz_timer.timeout.connect(self._update_visualization_batch)
+        self.viz_timer.setInterval(33)  # ~30 FPS
+        self.viz_timer.start()
         
         # Set up replay timer
         self.replay_timer = QTimer()
@@ -259,10 +269,48 @@ class SwarmControlTower(QMainWindow):
         j_layout.addWidget(j_one_btn)
         
         quickset_layout.addLayout(j_layout)
-        
+
+        # Target setup buttons
+        target_layout = QHBoxLayout()
+
+        self.toggle_button = QCheckBox("Target Active")
+        self.toggle_button.clicked.connect(self.toggle_target_active)
+        target_layout.addWidget(self.toggle_button)
+
+        target_layout.addWidget(QLabel("X:"))
+        self.x_spinbox = QDoubleSpinBox()
+        self.x_spinbox.setRange(-10.0, 10.0)
+        self.x_spinbox.setSingleStep(0.1)
+        self.x_spinbox.setValue(0.0)
+        self.x_spinbox.setDecimals(2)
+        self.x_spinbox.valueChanged.connect(self._on_target_changed)
+        target_layout.addWidget(self.x_spinbox)
+
+        target_layout.addWidget(QLabel("Y:"))
+        self.y_spinbox = QDoubleSpinBox()
+        self.y_spinbox.setRange(-10.0, 10.0)
+        self.y_spinbox.setSingleStep(0.1)
+        self.y_spinbox.setValue(0.0)
+        self.y_spinbox.setDecimals(2)
+        self.y_spinbox.valueChanged.connect(self._on_target_changed)
+        target_layout.addWidget(self.y_spinbox)
+
+        target_layout.addWidget(QLabel("Z:"))
+        self.z_spinbox = QDoubleSpinBox()
+        self.z_spinbox.setRange(-10.0, 10.0)
+        self.z_spinbox.setSingleStep(0.1)
+        self.z_spinbox.setValue(0.0)
+        self.z_spinbox.setDecimals(2)
+        self.z_spinbox.valueChanged.connect(self._on_target_changed)
+        target_layout.addWidget(self.z_spinbox)
+
+        quickset_layout.addLayout(target_layout)
+
+        # Finalize the quickset group
+
         quickset_group.setLayout(quickset_layout)
         layout.addWidget(quickset_group)
-        
+
         # Drone status widgets in a grid
         drones_group = QGroupBox("Drone Status")
         drones_layout = QGridLayout()
@@ -329,48 +377,75 @@ class SwarmControlTower(QMainWindow):
         self.receive_thread.start()
         
     def _receive_data(self):
-        """Background thread for receiving ZMQ data"""
+        """Background thread for receiving ZMQ data - runs independently from GUI"""
         last_updated = [0] * MAX_COPTERS
+        last_counter = [0] * MAX_COPTERS
+        
+        # Create a poller for efficient non-blocking checks
+        poller = zmq.Poller()
+        poller.register(self.report_socket, zmq.POLLIN)
+        
+        # Batch updates to reduce signal emissions
+        update_batch = []
+        led_batch = []
+        last_batch_time = time.time()
+        BATCH_INTERVAL = 0.05  # Batch updates every 50ms
         
         while True:
             try:
-                report = self.report_socket.recv_json()
+                # Poll with a short timeout (10ms) to check for messages without blocking
+                socks = dict(poller.poll(10))
                 
-                # If we're replaying a recording, ignore any new live measurements to avoid conflicts
-                if hasattr(self, 'recorder') and self.recorder.is_replaying:
-                    continue
-
-                if report[0] == "connection_failed":
-                    self.signals.error_occurred.emit(
-                        "Connection Error",
-                        "Connection with sniffer failed! Please try again."
-                    )
-                    break
+                if self.report_socket in socks and socks[self.report_socket] == zmq.POLLIN:
+                    report = self.report_socket.recv_json(flags=zmq.NOBLOCK)
                     
-                # Process drone data
-                for data in report:
-                    if data.get("id") != "action" and isinstance(data.get("id"), int):
-                        drone_id = data["id"] - 1  # Convert to 0-based index
+                    # If we're replaying a recording, ignore any new live measurements to avoid conflicts
+                    if hasattr(self, 'recorder') and self.recorder.is_replaying:
+                        continue
+
+                    if report[0] == "connection_failed":
+                        self.signals.error_occurred.emit(
+                            "Connection Error",
+                            "Connection with sniffer failed! Please try again."
+                        )
+                        break
                         
-                        if 0 <= drone_id < MAX_COPTERS:
-                            # Emit signal for GUI update
-                            self.signals.drone_updated.emit(drone_id, data)
+                    # Process drone data efficiently
+                    current_time = time.time()
+                    for data in report:
+                        if data.get("id") != "action" and isinstance(data.get("id"), int):
+                            drone_id = data["id"] - 1  # Convert to 0-based index
                             
-                            # Check for updates
-                            if self.drone_widgets[drone_id].is_updated(data["counter"]):
-                                self.signals.led_update.emit(drone_id, "green")
-                                last_updated[drone_id] = time.time()
+                            if 0 <= drone_id < MAX_COPTERS:
+                                # Add to batch for processing
+                                update_batch.append((drone_id, data))
                                 
-            except zmq.error.Again:
-                pass  # Timeout, continue
+                                # Check for updates (do this in background thread to reduce GUI load)
+                                if data["counter"] != last_counter[drone_id]:
+                                    led_batch.append((drone_id, "green"))
+                                    last_counter[drone_id] = data["counter"]
+                                    last_updated[drone_id] = current_time
+                
+                # Emit batched updates periodically
+                current_time = time.time()
+                if update_batch and (current_time - last_batch_time) >= BATCH_INTERVAL:
+                    # Emit all batched updates
+                    for drone_id, data in update_batch:
+                        self.signals.drone_updated.emit(drone_id, data)
+                    for drone_id, color in led_batch:
+                        self.signals.led_update.emit(drone_id, color)
+                    
+                    update_batch.clear()
+                    led_batch.clear()
+                    last_batch_time = current_time
+                    
             except Exception as e:
                 print(f"Error in receive thread: {e}")
                 
-            # Check for timeouts
+            # Check for timeouts (less frequently)
             current_time = time.time()
             for i in range(MAX_COPTERS):
-                if (current_time - last_updated[i] > COPTER_ALIVE_TIMEOUT):  # Skip drone 9 (index 8) as noted in original code
-                    
+                if last_updated[i] > 0 and (current_time - last_updated[i] > COPTER_ALIVE_TIMEOUT):
                     timeout_data = {
                         "id": i + 1,
                         "state": State.STATE_IDLE,
@@ -381,25 +456,45 @@ class SwarmControlTower(QMainWindow):
                     }
                     
                     self.signals.drone_updated.emit(i, timeout_data)
+                    last_updated[i] = 0  # Reset to avoid repeated timeout signals
                     
     def update_drone_display(self, drone_id: int, data: Dict):
         """Update drone display (called from main thread via signal)"""
         if 0 <= drone_id < MAX_COPTERS:
             widget = self.drone_widgets[drone_id]
             
-            # Update widget
+            # Update widget (lightweight operation)
             widget.set_state(data["state"])
             widget.set_battery(data["battery"])
             widget.set_position(data["position"])
             
-            # Update 3D visualization
-            self.visualization.update_drone_position(
-                drone_id, data["position"], data["state"], data["phase"]
-            )
+            # Buffer data for batch visualization update
+            # This decouples data reception from expensive 3D rendering
+            with self.buffer_lock:
+                self.drone_data_buffer[drone_id] = {
+                    "position": data["position"],
+                    "state": data["state"],
+                    "phase": data["phase"]
+                }
             
             # Record data if experiment is running and recording is active
             if self.experiment_running and self.recorder.is_recording:
                 self.recorder.record_drone_data(drone_id, data)
+    
+    def _update_visualization_batch(self):
+        """Batch update 3D visualization at fixed frame rate (called by timer)"""
+        # Get and clear buffer atomically
+        with self.buffer_lock:
+            updates = self.drone_data_buffer.copy()
+            self.drone_data_buffer.clear()
+        
+        # Apply all buffered updates in one go
+        # Skip expensive trail visual updates - the trail timer handles that
+        for drone_id, data in updates.items():
+            self.visualization.update_drone_position(
+                drone_id, data["position"], data["state"], data["phase"], 
+                update_trail=False  # Let the trail timer handle trail rendering
+            )
             
     def show_error(self, title: str, message: str):
         """Show error message dialog"""
@@ -671,6 +766,25 @@ class SwarmControlTower(QMainWindow):
                 widget.set_parameters(params)
                 self.send_parameters_to_drone(widget.drone_id, params)
                 count += 1
+
+    def toggle_target_active(self, checked: bool):
+        """Toggle target active state for all drones"""
+        for widget in self.drone_widgets:
+            if widget.is_active:
+                params = {'targetSet': checked}
+                widget.set_parameters(params)
+                self.send_parameters_to_drone(widget.drone_id, params)
+
+    def _on_target_changed(self):
+        """Update target position for all active drones"""
+        x_value = self.x_spinbox.value()
+        y_value = self.y_spinbox.value()
+        z_value = self.z_spinbox.value()
+        for widget in self.drone_widgets:
+            if widget.is_active:
+                params = {'target': [x_value, y_value, z_value]}
+                widget.set_parameters(params)
+                self.send_parameters_to_drone(widget.drone_id, params)
             
     def closeEvent(self, event):
         """Handle application close"""

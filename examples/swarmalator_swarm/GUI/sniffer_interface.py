@@ -187,27 +187,32 @@ class SnifferInterface:
         time.sleep(1 / self.REPORT_FREQUENCY)
 
     def check_for_commands(self):
-        try:
-            report = self.command_socket.recv_json()
-            
-            command = report.get("command", None)
+        # Use a poller to efficiently check if a message is available
+        poller = zmq.Poller()
+        poller.register(self.command_socket, zmq.POLLIN)
+        
+        # Check if there's a message waiting (non-blocking poll with 0 timeout)
+        socks = dict(poller.poll(0))
+        
+        if self.command_socket in socks and socks[self.command_socket] == zmq.POLLIN:
+            try:
+                report = self.command_socket.recv_json(flags=zmq.NOBLOCK)
+                
+                command = report.get("command", None)
 
-            print(Fore.YELLOW + "Received command: {}".format(command), Fore.RESET)
-            
-            if command == "toggleIsExperimentRunning":
-                self.toggleIsExperimentRunning()
-            elif command == "updateSwarmalatorParameters":
-                params = report["parameters"]
-                agentId = report["droneId"]
+                print(Fore.YELLOW + "Received command: {}".format(command), Fore.RESET)
+                
+                if command == "toggleIsExperimentRunning":
+                    self.toggleIsExperimentRunning()
+                elif command == "updateSwarmalatorParameters":
+                    params = report["parameters"]
+                    agentId = report["droneId"]
 
-                self.updateSwarmalatorParameters(agentId, params)
-                print(Fore.CYAN + "Updated swarmalator parameters for drone {}".format(agentId), Fore.RESET)
+                    self.updateSwarmalatorParameters(agentId, params)
+                    print(Fore.CYAN + "Updated swarmalator parameters for drone {}".format(agentId), Fore.RESET)
 
-        except zmq.ZMQError as e:
-            if e.errno == zmq.EAGAIN:
-                pass  # no message was ready (yet!)
-        except Exception as e:
-            print(Fore.RED + "Error receiving command: {}".format(e), Fore.RESET)
+            except Exception as e:
+                print(Fore.RED + "Error receiving command: {}".format(e), Fore.RESET)
 
     def disconnect(self):
         self.cf.close_link()

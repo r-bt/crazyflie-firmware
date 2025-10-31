@@ -155,8 +155,16 @@ class DroneVisualization:
             label.visible = False
             self.drone_labels.append(label)
     
-    def update_drone_position(self, drone_id: int, position: Dict, state: int, phase: float):
-        """Update the 3D position of a specific drone"""
+    def update_drone_position(self, drone_id: int, position: Dict, state: int, phase: float, update_trail: bool = True):
+        """Update the 3D position of a specific drone
+        
+        Args:
+            drone_id: ID of the drone to update
+            position: Dictionary with x, y, z coordinates
+            state: Current state of the drone
+            phase: Current phase value (for color)
+            update_trail: If False, skip expensive trail visual update (trails will be updated by timer)
+        """
         if drone_id < 0 or drone_id >= MAX_COPTERS:
             return
             
@@ -180,7 +188,7 @@ class DroneVisualization:
         label.pos = (x, y, z + 0.1)  # Slightly above the drone
         label.visible = is_active
         
-        # Update trail with time-based decay
+        # Update trail data (lightweight - just append to list)
         if is_active:
             # Add new position with timestamp
             self.position_history[drone_id].append([x, y, z])
@@ -189,8 +197,10 @@ class DroneVisualization:
             # Remove old positions based on time and length limits
             self._cleanup_trail(drone_id, current_time)
             
-            # Update trail visual with fade effect
-            self._update_trail_visual(drone_id, current_time)
+            # Only update trail visual if requested (expensive operation)
+            # The trail timer will update visuals periodically anyway
+            if update_trail:
+                self._update_trail_visual(drone_id, current_time)
         else:
             # Clear trail when drone is inactive
             self.position_history[drone_id].clear()
