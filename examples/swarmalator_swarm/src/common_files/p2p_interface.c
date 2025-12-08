@@ -23,7 +23,12 @@ swarmalator_params_t swarmalatorParams = {
     .A = 1.0f,
     .B = 1.0f,
     .naturalFrequency = 0.0f,
-    .startingPhase = 0.0f
+    .startingPhase = 0.0f,
+    .targetSet = 0,
+    .targetX = 0.0f,
+    .targetY = 0.0f,
+    .targetZ = 0.0f,
+    .alpha = 1.0f
 };
 
 // Swarmalator control parameters
@@ -77,8 +82,7 @@ static void p2pHandleCopterMessage(P2PPacket* p)
     if (received_id > 0) {
         enum State state = rxMessage.fullState.state;
 
-        if (state == STATE_TAKING_OFF || state == STATE_HOVERING || state == STATE_EXECUTING_SWARMALATOR || state == STATE_PREPARING_TO_LAND || state == STATE_LANDING) {
-
+        if (state == STATE_TAKING_OFF || state == STATE_HOVERING || state == STATE_EXECUTING_SWARMALATOR || state == STATE_PREPARING_TO_LAND || state == STATE_GOING_HOME || state == STATE_LANDING) {
             positionMeasurement_t pos_measurement;
             memcpy(&pos_measurement.pos, &rxMessage.fullState.position, sizeof(Position));
 
@@ -116,6 +120,9 @@ static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
 
     // Save the swarmalator params
     memcpy(&swarmalatorParams, &rxMessage.swarmalatorParams, sizeof(swarmalator_params_t));
+
+    DEBUG_PRINT("Received new swarmalator params version %lu\n", rxMessage.swarmalatorParamsVersion);
+    DEBUG_PRINT("Target set: %u, Target: (%.2f, %.2f, %.2f), alpha: %.2f\n", swarmalatorParams.targetSet, (double)swarmalatorParams.targetX, (double)swarmalatorParams.targetY, (double)swarmalatorParams.targetZ, (double)swarmalatorParams.alpha);
 
     // Update the swarmalator params version
     swarmalatorParamsVersion = rxMessage.swarmalatorParamsVersion;

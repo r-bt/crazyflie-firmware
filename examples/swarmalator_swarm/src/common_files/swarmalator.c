@@ -22,11 +22,6 @@ float duration = 0.0f; // Duration of the trajectory
 static plane_t *s_boundaryPlanes;
 static int s_numBoundaryPlanes = 0;
 
-bool isTargetSet = false;
-float target[3] = { 1.0f, 1.0f, 0.75f};
-
-float alpha = 1.0f; // Weighting factor for J1
-
 void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes)
 {
     swarmalator_params_t* params = getSwarmalatorParams();
@@ -39,15 +34,21 @@ void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlan
 
 float getJ1Value(int my_id, float xPos, float yPos, float zPos) {
 
-    float distToTarget = sqrtf(powf(target[0] - xPos, 2) + powf(target[1] - yPos, 2) + powf(target[2] - zPos, 2));
+    swarmalator_params_t* params = getSwarmalatorParams();
+
+    float distToTarget = sqrtf(powf(params->targetX - xPos, 2) + powf(params->targetY - yPos, 2) + powf(params->targetZ - zPos, 2));
     float minDist = distToTarget;
     float maxDist = distToTarget;
 
     for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
-            copter_full_state_t peer = getPeerState(i);
+            peerLocalizationOtherPosition_t *peerPosition = peerLocalizationGetPositionByID(i);
 
-            float distance = sqrtf(powf(target[0] - peer.position.x, 2) + powf(target[1] - peer.position.y, 2) + powf(target[2] - peer.position.z, 2));
+            if (peerPosition == NULL) {
+                continue;
+            }
+
+            float distance = sqrtf(powf(params->targetX - peerPosition->pos.x, 2) + powf(params->targetY - peerPosition->pos.y, 2) + powf(params->targetZ - peerPosition->pos.z, 2));
 
             if (distance < minDist) {
                 minDist = distance;
@@ -58,7 +59,7 @@ float getJ1Value(int my_id, float xPos, float yPos, float zPos) {
         }
     }
 
-    float J_val = alpha * fabsf((distToTarget - minDist) / (maxDist - minDist));
+    float J_val = params->alpha * fabsf((distToTarget - minDist) / (maxDist - minDist));
 
     DEBUG_PRINT("J1 Value: %f, Dist to Target: %f, Min Dist: %f, Max Dist: %f\n", (double)J_val, (double)distToTarget, (double)minDist, (double)maxDist);
 
@@ -92,21 +93,27 @@ void update_swarmalator(uint8_t my_id)
         float v_z_sum = 0.0f;
     #endif
 
-    float J = isTargetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
+    // float J = params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
+    float J = calculate_safe_J(my_id, params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J);
 
     // Loop over all the other agents (note start at 1 since we don't include the tower)
     for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
         if (i != my_id && peerLocalizationIsIDActive(i)) {
             numActiveCopter++;
 
+            peerLocalizationOtherPosition_t *peerPosition = peerLocalizationGetPositionByID(i);
             copter_full_state_t peer = getPeerState(i);
+            
+            if (peerPosition == NULL) {
+                continue;
+            }
 
             float thetaDiff = peer.phase - phase;
 
             #ifdef THREE_D_MODE
-                float distance = sqrtf(powf(peer.position.x - x_pos, 2) + powf(peer.position.y - y_pos, 2) + powf(peer.position.z - z_pos, 2));
+                float distance = sqrtf(powf(peerPosition->pos.x - x_pos, 2) + powf(peerPosition->pos.y - y_pos, 2) + powf(peerPosition->pos.z - z_pos, 2));
             #else
-                float distance = sqrtf(powf(peer.position.x - x_pos, 2) + powf(peer.position.y - y_pos, 2));
+                float distance = sqrtf(powf(peerPosition->pos.x - x_pos, 2) + powf(peerPosition->pos.y - y_pos, 2));
             #endif
 
             if (distance == 0.0f) {
@@ -114,11 +121,11 @@ void update_swarmalator(uint8_t my_id)
             }
 
             phase_sum += (sinf(thetaDiff) / distance);
-            v_x_sum += ((peer.position.x - x_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.x - x_pos) / (distance * distance));
-            v_y_sum += ((peer.position.y - y_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.y - y_pos) / (distance * distance));
+            v_x_sum += ((peerPosition->pos.x - x_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.x - x_pos) / (distance * distance));
+            v_y_sum += ((peerPosition->pos.y - y_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.y - y_pos) / (distance * distance));
 
             #ifdef THREE_D_MODE
-                v_z_sum += ((peer.position.z - z_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peer.position.z - z_pos) / (distance * distance));
+                v_z_sum += ((peerPosition->pos.z - z_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.z - z_pos) / (distance * distance));
             #endif
         }
     }
@@ -145,6 +152,10 @@ void update_swarmalator(uint8_t my_id)
 
         plane_t plane = s_boundaryPlanes[i];
 
+        if (!plane.doesRepulse) {
+            continue;
+        }
+
         // Compute the distance from agent to the plane
         #ifdef THREE_D_MODE
             float distance = (x_pos - plane.point.x) * plane.normal.x + (y_pos - plane.point.y) * plane.normal.y + (z_pos - plane.point.z) * plane.normal.z;
@@ -158,8 +169,8 @@ void update_swarmalator(uint8_t my_id)
 
         distance += (1 - PLANE_INFLECTION_DISTANCE); // Shift the distance so that repulsion becomes exponential at the inflection distance
 
-        plane_v_x_sum += ((plane.normal.x / distance * distance) * params->B);
-        plane_v_y_sum += ((plane.normal.y / distance * distance) * params->B);
+        plane_v_x_sum += ((plane.normal.x / (distance * distance)) * params->B);
+        plane_v_y_sum += ((plane.normal.y / (distance * distance)) * params->B);
 
         #ifdef THREE_D_MODE
             plane_v_z_sum += ((plane.normal.z / (distance * distance)) * params->B);
@@ -193,6 +204,163 @@ void update_swarmalator(uint8_t my_id)
 
     prevUpdate_ms = T2M(xTaskGetTickCount());
 }
+
+float calculate_safe_J(int my_id, float J_target) {
+    swarmalator_params_t* params = getSwarmalatorParams();
+
+    float myX = getX();
+    float myY = getY();
+#ifdef THREE_D_MODE
+    float myZ = getZ();
+#endif
+    float myPhase = getPhase();
+
+    float centroid_x = 0.0f;
+    float centroid_y = 0.0f;
+#ifdef THREE_D_MODE
+    float centroid_z = 0.0f;
+#endif
+    float Lfb0[3] = {0,0,0};
+    float Lgb0[3] = {0,0,0};
+
+    uint8_t numActiveCopter = 0;
+
+    for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
+        if (i == my_id || !peerLocalizationIsIDActive(i)) continue;
+
+        peerLocalizationOtherPosition_t *peerPos = peerLocalizationGetPositionByID(i);
+        if (!peerPos) continue;
+
+        copter_full_state_t peer = getPeerState(i);
+
+        float dx = peerPos->pos.x - myX;
+        float dy = peerPos->pos.y - myY;
+#ifdef THREE_D_MODE
+        float dz = peerPos->pos.z - myZ;
+#endif
+
+        float distance2 = dx*dx + dy*dy
+#ifdef THREE_D_MODE
+                          + dz*dz
+#endif
+                          ;
+        float distance = sqrtf(distance2);
+        if (distance < 1e-2f) distance = 1e-2f; // avoid div0
+
+        float thetaDiff = peer.phase - myPhase;
+
+        // accumulate centroid
+        centroid_x += peerPos->pos.x;
+        centroid_y += peerPos->pos.y;
+#ifdef THREE_D_MODE
+        centroid_z += peerPos->pos.z;
+#endif
+
+        // accumulate Lfb0
+        float A = params->A;
+        float B = params->B;
+        float invDist = 1.0f / distance;
+        float invDist2 = 1.0f / (distance*distance);
+
+        Lfb0[0] += A*dx*invDist - B*dx*invDist2;
+        Lfb0[1] += A*dy*invDist - B*dy*invDist2;
+#ifdef THREE_D_MODE
+        Lfb0[2] += A*dz*invDist - B*dz*invDist2;
+#endif
+
+        // accumulate Lgb0
+        float cosTheta = cosf(thetaDiff);
+        Lgb0[0] += dx*invDist*cosTheta;
+        Lgb0[1] += dy*invDist*cosTheta;
+#ifdef THREE_D_MODE
+        Lgb0[2] += dz*invDist*cosTheta;
+#endif
+
+        numActiveCopter++;
+    }
+
+    if (numActiveCopter == 0) return J_target; // no neighbors
+
+    // Average centroid and Lfb/Lgb
+    centroid_x /= numActiveCopter;
+    centroid_y /= numActiveCopter;
+#ifdef THREE_D_MODE
+    centroid_z /= numActiveCopter;
+#endif
+
+    Lfb0[0] /= numActiveCopter;
+    Lfb0[1] /= numActiveCopter;
+#ifdef THREE_D_MODE
+    Lfb0[2] /= numActiveCopter;
+#endif
+
+    Lgb0[0] /= numActiveCopter;
+    Lgb0[1] /= numActiveCopter;
+#ifdef THREE_D_MODE
+    Lgb0[2] /= numActiveCopter;
+#endif
+
+    // Compute center difference
+#ifdef THREE_D_MODE
+    float center_diff[3] = { myX - centroid_x, myY - centroid_y, myZ - centroid_z };
+#else
+    float center_diff[3] = { myX - centroid_x, myY - centroid_y, 0.0f };
+#endif
+
+    float norm2 = center_diff[0]*center_diff[0] + center_diff[1]*center_diff[1]
+#ifdef THREE_D_MODE
+                  + center_diff[2]*center_diff[2]
+#endif
+                  ;
+
+    float rMin = 0.4f;
+    float rMax = 0.6f;
+
+    float b1 = norm2 - rMin*rMin;
+    float b2 = rMax*rMax - norm2;
+
+    float Lfb1 = 2*(center_diff[0]*Lfb0[0] + center_diff[1]*Lfb0[1]
+#ifdef THREE_D_MODE
+                     + center_diff[2]*Lfb0[2]
+#endif
+                     );
+    float Lgb1 = 2*(center_diff[0]*Lgb0[0] + center_diff[1]*Lgb0[1]
+#ifdef THREE_D_MODE
+                     + center_diff[2]*Lgb0[2]
+#endif
+                     );
+
+    float Lfb2 = -Lfb1;
+    float Lgb2 = -Lgb1;
+
+    float u_min = -1e30f;
+    float u_max = 1e30f;
+    float p = 10.0f;
+
+    // Constraint 1
+    if (fabsf(Lgb1) > 1e-9f) {
+        float rhs1 = -(Lfb1 + p*b1);
+        if (Lgb1 > 0) {
+            if (rhs1/Lgb1 > u_min) u_min = rhs1/Lgb1;
+        } else {
+            if (rhs1/Lgb1 < u_max) u_max = rhs1/Lgb1;
+        }
+    }
+
+    // Constraint 2
+    if (fabsf(Lgb2) > 1e-9f) {
+        float rhs2 = -(Lfb2 + p*b2);
+        if (Lgb2 > 0) {
+            if (rhs2/Lgb2 > u_min) u_min = rhs2/Lgb2;
+        } else {
+            if (rhs2/Lgb2 < u_max) u_max = rhs2/Lgb2;
+        }
+    }
+
+    float J_safe = fminf(fmaxf(J_target, u_min), u_max);
+    return J_safe;
+}
+
 
 float getPhase()
 {

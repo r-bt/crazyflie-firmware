@@ -76,6 +76,7 @@ class SnifferInterface:
         self._log_confs = []
 
         self._is_experiment_running = False
+        self._is_target_set = False
 
     def _initialize_copters(self) -> List[Copter]:
         copters = []
@@ -200,10 +201,22 @@ class SnifferInterface:
                 
                 command = report.get("command", None)
 
-                print(Fore.YELLOW + "Received command: {}".format(command), Fore.RESET)
+                # print(Fore.YELLOW + "Received command: {}".format(command), Fore.RESET)
                 
                 if command == "toggleIsExperimentRunning":
                     self.toggleIsExperimentRunning()
+                elif command == "toggleIsTargetSet":
+                    active = report.get("active", False)
+                    self.toggleIsTargetSet(active)
+                elif command == "updateTargetPosition":
+                    x = report["position"]["x"]
+                    y = report["position"]["y"]
+                    z = report["position"]["z"]
+
+                    self.updateTargetPosition(x, y, z)
+                elif command == 'updateTargetAlpha':
+                    alpha = report['alpha']
+                    self.cf.param.set_value("app.targetAlpha", alpha)
                 elif command == "updateSwarmalatorParameters":
                     params = report["parameters"]
                     agentId = report["droneId"]
@@ -226,6 +239,14 @@ class SnifferInterface:
     def toggleIsExperimentRunning(self):
         self._is_experiment_running = not self._is_experiment_running
         self.cf.param.set_value("app.isExperimentRunning", self._is_experiment_running)
+
+    def toggleIsTargetSet(self, active: bool):
+        self.cf.param.set_value("app.isTargetSet", active)
+
+    def updateTargetPosition(self, x, y, z):
+        self.cf.param.set_value("app.targetX", x)
+        self.cf.param.set_value("app.targetY", y)
+        self.cf.param.set_value("app.targetZ", z)
 
     def updateSwarmalatorParameters(self, agentId, params):
         if 'K' in params:

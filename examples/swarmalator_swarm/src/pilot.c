@@ -49,15 +49,16 @@ static float padZ = 0.0;
 static uint32_t stabilizeEndTime_ms;
 
 static bool isCrashInitialized = false;
+static bool isInFlightArea = true;
 
 // Boundary planes to prevent agents from existing the flight area (i.e. the area that the lighthouse can track them in)
 static plane_t boundaryPlanes[] = {
-    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1} },
-    { .point = {.x = 0, .y = 0, .z = 1.8}, .normal = {.x = 0, .y = 0, .z = -1} },
-    { .point = {.x = 1.5, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0} },
-    { .point = {.x = -1.5, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0} },
-    { .point = {.x = 0, .y = 1.5, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0} },
-    { .point = {.x = 0, .y = -1.5, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0} }
+    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1}, .doesRepulse = true },
+    { .point = {.x = 0, .y = 0, .z = 1.9}, .normal = {.x = 0, .y = 0, .z = -1}, .doesRepulse = true },
+    { .point = {.x = 1.7, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0}, .doesRepulse = true },
+    { .point = {.x = -1.7, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0}, .doesRepulse = true },
+    { .point = {.x = 0, .y = 2.1, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0}, .doesRepulse = true },
+    { .point = {.x = 0, .y = -2.1, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0}, .doesRepulse = true }
 };
 int numBoundaryPlanes = sizeof(boundaryPlanes) / sizeof(boundaryPlanes[0]);
 
@@ -174,7 +175,7 @@ static void stateTransition(xTimerHandle timer)
         if (!chargedForTakeoff()) {
             DEBUG_PRINT("Battery not charged for take off\n");
             // do nothing, wait for the battery to be charged
-        } else if (isExperimentRunning()) {
+        } else if (isExperimentRunning() && isInFlightArea) {
             DEBUG_PRINT("Entering takeoff queue...\n");
             state = STATE_QUEUED_FOR_TAKE_OFF;
             initSwarmalator(my_id, boundaryPlanes, numBoundaryPlanes); // reset swarmalator
@@ -205,7 +206,7 @@ static void stateTransition(xTimerHandle timer)
         }
         break;
     case STATE_HOVERING:
-        if (!isExperimentRunning()) {
+        if (!isExperimentRunning() || !isInFlightArea) {
             DEBUG_PRINT("Not running, going home\n");
             random_time_for_next_event_ms = get_next_random_timeout(now_ms);
             stabilizeEndTime_ms = now_ms + STABILIZE_TIMEOUT;
@@ -229,6 +230,24 @@ static void stateTransition(xTimerHandle timer)
                 setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), TAKE_OFF_HEIGHT, 0);
             #endif
             commanderSetSetpoint(&setpoint, 3);
+
+            float x_pos = getX();
+            float y_pos = getY();
+            float z_pos = getZ();
+
+            for (int i = 0; i < numBoundaryPlanes; i++) {
+                plane_t plane = boundaryPlanes[i];
+
+                float distance = ((plane.normal.x * (x_pos - plane.point.x)) +
+                                  (plane.normal.y * (y_pos - plane.point.y)) +
+                                  (plane.normal.z * (z_pos - plane.point.z)));
+
+                if (distance < -0.05f) {
+                    DEBUG_PRINT("Warning: approaching boundary plane %d, distance: %f\n", i, (double)distance);
+                    isInFlightArea = false;
+                    break;
+                }
+            }
         }
         break;
     case STATE_PREPARING_TO_LAND:

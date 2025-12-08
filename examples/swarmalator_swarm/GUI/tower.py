@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QGridLayout, QLabel, QPushButton, QCheckBox,
     QSplitter, QMessageBox, QGroupBox, QSlider,
-    QFileDialog, QScrollArea, QDoubleSpinBox
+    QFileDialog, QScrollArea, QDoubleSpinBox, QLineEdit
 )
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont
@@ -29,6 +29,7 @@ from experiment_recorder import ExperimentRecorder
 from drone_visualization import DroneVisualization
 from drone_widget import CrazyflieWidget
 from data_signals import DataUpdateSignals
+from drawing_widget import DrawingDialog
 
 COPTER_ALIVE_TIMEOUT = 2  # sec
 
@@ -75,6 +76,21 @@ class SwarmControlTower(QMainWindow):
         self.replay_timer = QTimer()
         self.replay_timer.timeout.connect(self._update_replay)
         self.replay_timer.setInterval(50)  # Update every 50ms for smooth replay
+
+        self._text_target_active = False
+        self._text_target_locs = []
+        self._text_target_index = 0
+        
+        # Drawing path following
+        self._path_following_active = False
+        self._path_points = []  # List of (x, y, z) waypoints
+        self._current_waypoint_index = 0
+        self._waypoint_threshold = 0.13  # Distance threshold in meters to consider waypoint reached
+        
+        # Path following update timer
+        self.path_timer = QTimer()
+        self.path_timer.timeout.connect(self._update_path_following)
+        self.path_timer.setInterval(100)  # Check every 100ms
         
     def _setup_zmq(self):
         """Initialize ZMQ sockets"""
@@ -304,7 +320,40 @@ class SwarmControlTower(QMainWindow):
         self.z_spinbox.valueChanged.connect(self._on_target_changed)
         target_layout.addWidget(self.z_spinbox)
 
+        target_layout.addWidget(QLabel("Alpha:"))
+        self.alpha_spinbox = QDoubleSpinBox()
+        self.alpha_spinbox.setRange(-1.0, 2.0)
+        self.alpha_spinbox.setSingleStep(0.1)
+        self.alpha_spinbox.setValue(1.0)
+        self.alpha_spinbox.setDecimals(2)
+        self.alpha_spinbox.valueChanged.connect(self._on_alpha_changed)
+        target_layout.addWidget(self.alpha_spinbox)
+
         quickset_layout.addLayout(target_layout)
+        
+        # Drawing path control
+        drawing_layout = QHBoxLayout()
+        
+        self.draw_path_button = QPushButton("Draw Path")
+        self.draw_path_button.clicked.connect(self.open_drawing_dialog)
+        drawing_layout.addWidget(self.draw_path_button)
+        
+        self.path_following_toggle = QCheckBox("Path Following Active")
+        self.path_following_toggle.clicked.connect(self.toggle_path_following)
+        self.path_following_toggle.setEnabled(False)
+        drawing_layout.addWidget(self.path_following_toggle)
+        
+        self.clear_path_button = QPushButton("Clear Path")
+        self.clear_path_button.clicked.connect(self.clear_path)
+        self.clear_path_button.setEnabled(False)
+        drawing_layout.addWidget(self.clear_path_button)
+        
+        quickset_layout.addLayout(drawing_layout)
+        
+        # Path status
+        self.path_status_label = QLabel("No path loaded")
+        self.path_status_label.setStyleSheet("color: gray; font-style: italic;")
+        quickset_layout.addWidget(self.path_status_label)
 
         # Finalize the quickset group
 
@@ -769,25 +818,251 @@ class SwarmControlTower(QMainWindow):
 
     def toggle_target_active(self, checked: bool):
         """Toggle target active state for all drones"""
-        for widget in self.drone_widgets:
-            if widget.is_active:
-                params = {'targetSet': checked}
-                widget.set_parameters(params)
-                self.send_parameters_to_drone(widget.drone_id, params)
+        command = {"command": "toggleIsTargetSet", "active": checked}
+        try:
+            self.command_socket.send_json(command, zmq.NOBLOCK)
+        except Exception as e:
+            print(f"Error sending command: {e}")
 
+    def toggle_text_target_active(self, checked: bool):
+        """Toggle text target active state for all drones"""
+        self._text_target_active = checked
+
+    def _on_alpha_changed(self):
+        """Update alpha parameter for all active drones"""
+        alpha_value = self.alpha_spinbox.value()
+        
+        command = {
+            "command": "updateTargetAlpha",
+            "alpha": alpha_value
+        }
+
+        try:
+            self.command_socket.send_json(command, zmq.NOBLOCK)
+        except Exception as e:
+            print(f"Error sending command: {e}")
+    
     def _on_target_changed(self):
         """Update target position for all active drones"""
+        if self._path_following_active:
+            return  # Ignore position updates when path following is active
+
         x_value = self.x_spinbox.value()
         y_value = self.y_spinbox.value()
         z_value = self.z_spinbox.value()
-        for widget in self.drone_widgets:
-            if widget.is_active:
-                params = {'target': [x_value, y_value, z_value]}
-                widget.set_parameters(params)
-                self.send_parameters_to_drone(widget.drone_id, params)
+        
+        command = {
+            "command": "updateTargetPosition",
+            "position": {"x": x_value, "y": y_value, "z": z_value}
+        }
+
+        try:
+            self.command_socket.send_json(command, zmq.NOBLOCK)
+        except Exception as e:
+            print(f"Error sending command: {e}")
+    
+    def open_drawing_dialog(self):
+        """Open the drawing dialog to create a path"""
+        dialog = DrawingDialog(self)
+        dialog.points_confirmed.connect(self.on_path_drawn)
+        dialog.exec()
+    
+    def on_path_drawn(self, points: list):
+        """Handle confirmed drawing points"""
+        if not points:
+            return
             
+        self._path_points = points
+        self._current_waypoint_index = 0
+        
+        # Enable path following controls
+        self.path_following_toggle.setEnabled(True)
+        self.clear_path_button.setEnabled(True)
+        
+        # Visualize waypoints in 3D view
+        self.visualization.show_path_waypoints(points)
+        
+        # Update status
+        self.path_status_label.setText(f"Path loaded: {len(points)} waypoints")
+        self.path_status_label.setStyleSheet("color: green; font-style: normal;")
+        
+        print(f"Path loaded with {len(points)} waypoints")
+        print(f"First waypoint: {points[0]}")
+        print(f"Last waypoint: {points[-1]}")
+    
+    def toggle_path_following(self, checked: bool):
+        """Toggle path following mode"""
+        if not self._path_points:
+            self.path_following_toggle.setChecked(False)
+            QMessageBox.warning(self, "No Path", "Please draw a path first!")
+            return
+        
+        self._path_following_active = checked
+        
+        if self._path_following_active:
+            # Reset to first waypoint
+            self._current_waypoint_index = 0
+            
+            # Start the path following timer
+            self.path_timer.start()
+            
+            # Send first waypoint to all drones
+            self._send_current_waypoint()
+            
+            self.path_status_label.setText(
+                f"Following path: waypoint 1/{len(self._path_points)}"
+            )
+            self.path_status_label.setStyleSheet("color: blue; font-weight: bold;")
+        else:
+            # Stop path following
+            self.path_timer.stop()
+            # Hide centroid marker when paused
+            self.visualization.hide_centroid_marker()
+            self.path_status_label.setText(f"Path paused at waypoint {self._current_waypoint_index + 1}/{len(self._path_points)}")
+            self.path_status_label.setStyleSheet("color: orange;")
+    
+    def clear_path(self):
+        """Clear the current path"""
+        self._path_points = []
+        self._current_waypoint_index = 0
+        self._path_following_active = False
+        
+        # Stop timer
+        self.path_timer.stop()
+        
+        # Clear visualizations
+        self.visualization.clear_path_waypoints()
+        self.visualization.hide_centroid_marker()
+        
+        # Disable controls
+        self.path_following_toggle.setChecked(False)
+        self.path_following_toggle.setEnabled(False)
+        self.clear_path_button.setEnabled(False)
+        
+        # Update status
+        self.path_status_label.setText("No path loaded")
+        self.path_status_label.setStyleSheet("color: gray; font-style: italic;")
+    
+    def _update_path_following(self):
+        """Update path following - check if swarm reached current waypoint"""
+        if not self._path_following_active or not self._path_points:
+            # Hide centroid marker when not following path
+            self.visualization.hide_centroid_marker()
+            return
+        
+        # Calculate swarm centroid
+        centroid = self._calculate_swarm_centroid()
+        
+        if centroid is None:
+            self.visualization.hide_centroid_marker()
+            return  # No active drones
+        
+        # Update centroid visualization
+        self.visualization.update_centroid_marker(centroid)
+        
+        # Get current waypoint
+        current_waypoint = self._path_points[self._current_waypoint_index]
+        
+        # Calculate distance to waypoint
+        distance = self._calculate_distance(centroid, current_waypoint)
+
+        print("Distance to waypoint:", distance)
+        
+        # Check if we've reached the waypoint
+        if distance < self._waypoint_threshold:
+            print(f"Reached waypoint {self._current_waypoint_index + 1}/{len(self._path_points)}")
+            
+            # Move to next waypoint
+            self._current_waypoint_index += 1
+            
+            # Check if we've completed the path
+            if self._current_waypoint_index >= len(self._path_points):
+                self._path_following_active = False
+                self.path_following_toggle.setChecked(False)
+                self.path_timer.stop()
+                
+                # Hide centroid marker when path is complete
+                self.visualization.hide_centroid_marker()
+                
+                self.path_status_label.setText("Path complete!")
+                self.path_status_label.setStyleSheet("color: green; font-weight: bold;")
+                
+                QMessageBox.information(
+                    self,
+                    "Path Complete",
+                    "The swarm has completed the drawn path!"
+                )
+                return
+            
+            # Send next waypoint
+            self._send_current_waypoint()
+            
+            # Update status
+            self.path_status_label.setText(
+                f"Following path: waypoint {self._current_waypoint_index + 1}/{len(self._path_points)}"
+            )
+    
+    def _calculate_swarm_centroid(self):
+        """Calculate the centroid of all active drones"""
+        active_positions = []
+        
+        for widget in self.drone_widgets:
+            if widget.is_active and hasattr(widget, 'last_position'):
+                pos = widget.last_position
+                if pos:
+                    active_positions.append((pos['x'], pos['y'], pos['z']))
+        
+        if not active_positions:
+            return None
+        
+        # Calculate average position
+        x = sum(p[0] for p in active_positions) / len(active_positions)
+        y = sum(p[1] for p in active_positions) / len(active_positions)
+        z = sum(p[2] for p in active_positions) / len(active_positions)
+        
+        return (x, y, z)
+    
+    def _calculate_distance(self, pos1, pos2):
+        """Calculate Euclidean distance between two 3D points"""
+        dx = pos1[0] - pos2[0]
+        dy = pos1[1] - pos2[1]
+        dz = pos1[2] - pos2[2]
+        
+        return (dx**2 + dy**2 + dz**2)**0.5
+    
+    def _send_current_waypoint(self):
+        """Send the current waypoint to all drones as a target"""
+        if not self._path_points or self._current_waypoint_index >= len(self._path_points):
+            return
+        
+        waypoint = self._path_points[self._current_waypoint_index]
+        
+        command = {
+            "command": "updateTargetPosition",
+            "position": {"x": waypoint[0], "y": waypoint[1], "z": waypoint[2]}
+        }
+        
+        try:
+            self.command_socket.send_json(command, zmq.NOBLOCK)
+            print(f"Sent waypoint {self._current_waypoint_index + 1}: {waypoint}")
+        except Exception as e:
+            print(f"Error sending waypoint: {e}")
+        
+        # Make sure target is active
+        if not self.toggle_button.isChecked():
+            target_command = {"command": "toggleIsTargetSet", "active": True}
+            try:
+                self.command_socket.send_json(target_command, zmq.NOBLOCK)
+                self.toggle_button.setChecked(True)
+            except Exception as e:
+                print(f"Error activating target: {e}")
+
     def closeEvent(self, event):
         """Handle application close"""
+        # Stop path following timer if running
+        if hasattr(self, 'path_timer'):
+            self.path_timer.stop()
+            
         # Stop replay timer if running
         if hasattr(self, 'replay_timer'):
             self.replay_timer.stop()

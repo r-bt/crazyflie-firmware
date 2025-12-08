@@ -15,6 +15,7 @@
 typedef struct {
     point_t point;
     vector_t normal;
+    bool doesRepulse;
 } plane_t;
 
 /**

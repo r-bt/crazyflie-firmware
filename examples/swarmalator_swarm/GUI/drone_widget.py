@@ -175,6 +175,7 @@ class CrazyflieWidget(QGroupBox):
     def set_position(self, position: Dict):
         """Update position display"""
         self.position = position
+        self.last_position = position  # Store for centroid calculation
         x, y, z = position['x'], position['y'], position['z']
         self.position_label.setText(f"Pos: ({x:.2f}, {y:.2f}, {z:.2f})")
         

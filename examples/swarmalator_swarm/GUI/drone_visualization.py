@@ -59,6 +59,14 @@ class DroneVisualization:
         # Initialize drone markers
         self._setup_drone_markers()
         
+        # Initialize path waypoint markers
+        self.waypoint_markers = []
+        self.waypoint_lines = None
+        
+        # Initialize centroid marker
+        self.centroid_marker = None
+        self.centroid_label = None
+        
         # Set up timer for continuous trail updates
         self._setup_trail_timer()
     
@@ -288,3 +296,99 @@ class DroneVisualization:
     def set_max_trail_length(self, max_length: int):
         """Set the maximum trail length in points"""
         self.max_trail_length = max_length
+    
+    def show_path_waypoints(self, waypoints: list):
+        """Display waypoints as markers in the 3D view
+        
+        Args:
+            waypoints: List of (x, y, z) tuples representing the path
+        """
+        # Clear existing waypoint markers
+        self.clear_path_waypoints()
+        
+        if not waypoints:
+            return
+        
+        # Create small sphere markers for each waypoint
+        for i, (x, y, z) in enumerate(waypoints):
+            marker = scene.visuals.Sphere(
+                radius=0.08,
+                color=(1.0, 1.0, 0.0, 0.6),  # Yellow, semi-transparent
+                parent=self.view.scene
+            )
+            marker.transform = scene.transforms.MatrixTransform()
+            marker.transform.translate([x, y, z])
+            self.waypoint_markers.append(marker)
+            
+            # Add text label for waypoint number
+            label = scene.visuals.Text(
+                text=str(i + 1),
+                color='yellow',
+                font_size=10,
+                parent=self.view.scene
+            )
+            label.pos = (x, y, z + 0.12)  # Slightly above the waypoint
+            self.waypoint_markers.append(label)
+        
+        # Draw lines connecting the waypoints
+        if len(waypoints) > 1:
+            waypoint_array = np.array(waypoints)
+            self.waypoint_lines = scene.visuals.Line(
+                pos=waypoint_array,
+                color=(1.0, 1.0, 0.0, 0.5),  # Yellow, semi-transparent
+                width=2,
+                parent=self.view.scene
+            )
+    
+    def clear_path_waypoints(self):
+        """Remove all waypoint markers from the view"""
+        for marker in self.waypoint_markers:
+            marker.parent = None
+        self.waypoint_markers.clear()
+        
+        if self.waypoint_lines is not None:
+            self.waypoint_lines.parent = None
+            self.waypoint_lines = None
+    
+    def update_centroid_marker(self, centroid: tuple):
+        """Update or create the centroid marker
+        
+        Args:
+            centroid: (x, y, z) tuple for the swarm centroid position
+        """
+        if centroid is None:
+            self.hide_centroid_marker()
+            return
+        
+        x, y, z = centroid
+        
+        # Create centroid marker if it doesn't exist
+        if self.centroid_marker is None:
+            self.centroid_marker = scene.visuals.Sphere(
+                radius=0.12,
+                color=(1.0, 0.0, 1.0, 0.8),  # Magenta, semi-transparent
+                parent=self.view.scene
+            )
+            self.centroid_marker.transform = scene.transforms.MatrixTransform()
+            
+            self.centroid_label = scene.visuals.Text(
+                text='Centroid',
+                color='magenta',
+                font_size=12,
+                parent=self.view.scene
+            )
+        
+        # Update position
+        self.centroid_marker.transform.reset()
+        self.centroid_marker.transform.translate([x, y, z])
+        self.centroid_marker.visible = True
+        
+        self.centroid_label.pos = (x, y, z + 0.15)
+        self.centroid_label.visible = True
+    
+    def hide_centroid_marker(self):
+        """Hide the centroid marker"""
+        if self.centroid_marker is not None:
+            self.centroid_marker.visible = False
+        if self.centroid_label is not None:
+            self.centroid_label.visible = False

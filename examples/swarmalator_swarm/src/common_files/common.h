@@ -41,4 +41,9 @@ typedef struct {
     float B;
     float naturalFrequency;
     float startingPhase;
+    uint8_t targetSet;
+    float targetX;
+    float targetY;
+    float targetZ;
+    float alpha;
 } swarmalator_params_t;

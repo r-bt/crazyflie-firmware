@@ -26,6 +26,12 @@ static float naturalFrequencies[MAX_ADDRESS];
 static float startingPhases[MAX_ADDRESS];
 static uint32_t swarmalatorParamsVersions[MAX_ADDRESS];
 
+static uint8_t isTargetSet = 0;
+static float targetX = 0.0f;
+static float targetY = 0.0f;
+static float targetZ = 0.0f;
+static float alpha = 1.0f;
+
 static void broadcastData(xTimerHandle timer)
 {
     uint32_t nowMs = T2M(xTaskGetTickCount());
@@ -42,18 +48,13 @@ static void broadcastData(xTimerHandle timer)
 
     broadcastToPeers(&fullState, nowMs);
 
-    for (uint8_t i = 0; i < MAX_ADDRESS; i++) {
+    for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
 
         copter_full_state_t peer = getPeerState(i);
 
         if (peer.state == STATE_UNKNOWN) {
             continue;
         }
-
-        // DEBUG_PRINT("Current swarmalator params for %u: K=%f, J=%f, A=%f, B=%f, f=%f, phase=%f (version=%lu)\n", i,
-        //     (double)Ks[i], (double)Js[i], (double)As[i], (double)Bs[i],
-        //     (double)naturalFrequencies[i], (double)startingPhases[i],
-        //     swarmalatorParamsVersions[i]);
 
         if (peer.swarmalatorParamsVersion != swarmalatorParamsVersions[i]) {
             // Send packet to update the swarmalator params on the peer
@@ -65,6 +66,11 @@ static void broadcastData(xTimerHandle timer)
             swarmalatorParams.B = Bs[i];
             swarmalatorParams.naturalFrequency = naturalFrequencies[i];
             swarmalatorParams.startingPhase = startingPhases[i];
+            swarmalatorParams.targetSet = isTargetSet;
+            swarmalatorParams.targetX = targetX;
+            swarmalatorParams.targetY = targetY;
+            swarmalatorParams.targetZ = targetZ;
+            swarmalatorParams.alpha = alpha;
 
             broadcastSwarmalatorParams(i, swarmalatorParamsVersions[i], &swarmalatorParams);
 
@@ -93,7 +99,7 @@ void appMain()
     DEBUG_PRINT("SWARMALATOR SNIFFER running\n");
 
     // Init the swarmalator params for all agents
-    for (int i = 0; i < MAX_ADDRESS; i++) {
+    for (int i = 1; i < MAX_ADDRESS; i++) {
         Ks[i] = 0.0f;
         Js[i] = 0.0f;
         As[i] = 1.0f;
@@ -115,6 +121,13 @@ void appMain()
     }
 }
 
+void updateAllSwarmalatorParams()
+{
+    for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
+        swarmalatorParamsCB(i);
+    }
+}
+
 #define DEFINE_SWARMALATOR_CB(AGENT_ID) \
     static void swarmalatorParamsCB_##AGENT_ID(void) { \
         swarmalatorParamsCB(AGENT_ID); \
@@ -128,7 +141,6 @@ void appMain()
     PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_naturalFrequency, &naturalFrequencies[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
     PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_phase, &startingPhases[AGENT_ID], swarmalatorParamsCB_##AGENT_ID)
 
-DEFINE_SWARMALATOR_CB(0)
 DEFINE_SWARMALATOR_CB(1)
 DEFINE_SWARMALATOR_CB(2)
 DEFINE_SWARMALATOR_CB(3)
@@ -142,7 +154,11 @@ DEFINE_SWARMALATOR_CB(10)
 
 PARAM_GROUP_START(app)
 PARAM_ADD_WITH_CALLBACK(PARAM_UINT8, isExperimentRunning, &isExperimentRunningVal, &isExperimentRunningCB)
-SWARMALATOR_AGENT_PARAMS(0)
+PARAM_ADD_WITH_CALLBACK(PARAM_UINT8, isTargetSet, &isTargetSet, &updateAllSwarmalatorParams)
+PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, targetX, &targetX, &updateAllSwarmalatorParams)
+PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, targetY, &targetY, &updateAllSwarmalatorParams)
+PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, targetZ, &targetZ, &updateAllSwarmalatorParams)
+PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, targetAlpha, &alpha, &updateAllSwarmalatorParams)
 SWARMALATOR_AGENT_PARAMS(1)
 SWARMALATOR_AGENT_PARAMS(2)
 SWARMALATOR_AGENT_PARAMS(3)
