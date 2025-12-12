@@ -22,6 +22,8 @@ float duration = 0.0f; // Duration of the trajectory
 static plane_t *s_boundaryPlanes;
 static int s_numBoundaryPlanes = 0;
 
+static float J = 0.0f;
+
 void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes)
 {
     swarmalator_params_t* params = getSwarmalatorParams();
@@ -30,6 +32,8 @@ void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlan
 
     s_boundaryPlanes = boundaryPlanes;
     s_numBoundaryPlanes = numBoundaryPlanes;
+
+    J = params->J;
 }
 
 float getJ1Value(int my_id, float xPos, float yPos, float zPos) {
@@ -94,7 +98,7 @@ void update_swarmalator(uint8_t my_id)
     #endif
 
     // float J = params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
-    float J = calculate_safe_J(my_id, params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J);
+    // J = calculate_safe_J(my_id, J);
 
     // Loop over all the other agents (note start at 1 since we don't include the tower)
     for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
@@ -215,10 +219,10 @@ float calculate_safe_J(int my_id, float J_target) {
 #endif
     float myPhase = getPhase();
 
-    float centroid_x = 0.0f;
-    float centroid_y = 0.0f;
+    float centroid_x = myX;
+    float centroid_y = myY;
 #ifdef THREE_D_MODE
-    float centroid_z = 0.0f;
+    float centroid_z = myZ;
 #endif
     float Lfb0[3] = {0,0,0};
     float Lgb0[3] = {0,0,0};
@@ -282,10 +286,10 @@ float calculate_safe_J(int my_id, float J_target) {
     if (numActiveCopter == 0) return J_target; // no neighbors
 
     // Average centroid and Lfb/Lgb
-    centroid_x /= numActiveCopter;
-    centroid_y /= numActiveCopter;
+    centroid_x /= (numActiveCopter + 1);
+    centroid_y /= (numActiveCopter + 1);
 #ifdef THREE_D_MODE
-    centroid_z /= numActiveCopter;
+    centroid_z /= (numActiveCopter + 1);
 #endif
 
     Lfb0[0] /= numActiveCopter;
@@ -313,8 +317,8 @@ float calculate_safe_J(int my_id, float J_target) {
 #endif
                   ;
 
-    float rMin = 0.4f;
-    float rMax = 0.6f;
+    float rMin = 0.5f;
+    float rMax = 1.0f;
 
     float b1 = norm2 - rMin*rMin;
     float b2 = rMax*rMax - norm2;

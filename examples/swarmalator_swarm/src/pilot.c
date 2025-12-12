@@ -53,12 +53,12 @@ static bool isInFlightArea = true;
 
 // Boundary planes to prevent agents from existing the flight area (i.e. the area that the lighthouse can track them in)
 static plane_t boundaryPlanes[] = {
-    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1}, .doesRepulse = true },
-    { .point = {.x = 0, .y = 0, .z = 1.9}, .normal = {.x = 0, .y = 0, .z = -1}, .doesRepulse = true },
-    { .point = {.x = 1.7, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0}, .doesRepulse = true },
-    { .point = {.x = -1.7, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0}, .doesRepulse = true },
-    { .point = {.x = 0, .y = 2.1, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0}, .doesRepulse = true },
-    { .point = {.x = 0, .y = -2.1, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0}, .doesRepulse = true }
+    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1}, .doesRepulse = false },
+    { .point = {.x = 0, .y = 0, .z = 1.9}, .normal = {.x = 0, .y = 0, .z = -1}, .doesRepulse = false },
+    { .point = {.x = 1.7, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0}, .doesRepulse = false },
+    { .point = {.x = -1.7, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0}, .doesRepulse = false },
+    { .point = {.x = 0, .y = 2.1, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0}, .doesRepulse = false },
+    { .point = {.x = 0, .y = -2.1, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0}, .doesRepulse = false }
 };
 int numBoundaryPlanes = sizeof(boundaryPlanes) / sizeof(boundaryPlanes[0]);
 

@@ -71,3 +71,5 @@ float getPhase();
  * @return J1 value
  */
 float getJ1Value(int my_id, float xPos, float yPos, float zPos);
+
+float calculate_safe_J(int my_id, float J_target);
