@@ -6,12 +6,15 @@
 
 #define DEBUG_MODULE "SWARMALATOR"
 
+#define MAX_VELOCITY 0.5f // Maximum velocity in m/s
+
 static uint32_t prevUpdate_ms = 0;
 
 float phase = 0.0f; // Phase of the copter (radians)
 
 float desiredVx = 0.0f; // Desired x velocity
 float desiredVy = 0.0f; // Desired y velocity
+float desiredYaw = 0.0f; // Desired yaw rate
 
 #ifdef THREE_D_MODE
 float desiredVz = 0.0f; // Desired z velocity
@@ -23,6 +26,10 @@ static plane_t *s_boundaryPlanes;
 static int s_numBoundaryPlanes = 0;
 
 static float J = 0.0f;
+
+float B_x = 1.0f;
+float B_y = 1.5f;
+float B_z = 1.0f;
 
 void initSwarmalator(uint8_t my_id, plane_t* boundaryPlanes, int numBoundaryPlanes)
 {
@@ -63,9 +70,9 @@ float getJ1Value(int my_id, float xPos, float yPos, float zPos) {
         }
     }
 
-    float J_val = params->alpha * fabsf((distToTarget - minDist) / (maxDist - minDist));
+    float dc = minDist;
 
-    DEBUG_PRINT("J1 Value: %f, Dist to Target: %f, Min Dist: %f, Max Dist: %f\n", (double)J_val, (double)distToTarget, (double)minDist, (double)maxDist);
+    float J_val = params->alpha * fabsf((distToTarget - dc) / (maxDist - minDist));
 
     return J_val;
 }
@@ -97,8 +104,16 @@ void update_swarmalator(uint8_t my_id)
         float v_z_sum = 0.0f;
     #endif
 
-    // float J = params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
+    float centroid_x = x_pos;
+    float centroid_y = y_pos;
+
+    #ifdef THREE_D_MODE
+        float centroid_z = z_pos;
+    #endif
+
+    float J = params->targetSet ? getJ1Value(my_id, x_pos, y_pos, z_pos) : params->J;
     // J = calculate_safe_J(my_id, J);
+    // float J = params->J;
 
     // Loop over all the other agents (note start at 1 since we don't include the tower)
     for (uint8_t i = 1; i < MAX_ADDRESS; i++) {
@@ -125,11 +140,15 @@ void update_swarmalator(uint8_t my_id)
             }
 
             phase_sum += (sinf(thetaDiff) / distance);
-            v_x_sum += ((peerPosition->pos.x - x_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.x - x_pos) / (distance * distance));
-            v_y_sum += ((peerPosition->pos.y - y_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.y - y_pos) / (distance * distance));
+            v_x_sum += ((peerPosition->pos.x - x_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (B_x * (peerPosition->pos.x - x_pos) / (distance * distance));
+            v_y_sum += ((peerPosition->pos.y - y_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (B_y * (peerPosition->pos.y - y_pos) / (distance * distance));
+
+            centroid_x += peerPosition->pos.x;
+            centroid_y += peerPosition->pos.y;
 
             #ifdef THREE_D_MODE
-                v_z_sum += ((peerPosition->pos.z - z_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (params->B * (peerPosition->pos.z - z_pos) / (distance * distance));
+                centroid_z += peerPosition->pos.z;
+                v_z_sum += ((peerPosition->pos.z - z_pos) / distance) * (params->A + J * cosf(thetaDiff)) - (B_z * (peerPosition->pos.z - z_pos) / (distance * distance));
             #endif
         }
     }
@@ -138,11 +157,33 @@ void update_swarmalator(uint8_t my_id)
         phase_sum *= params->K / numActiveCopter;
         v_x_sum /= numActiveCopter;
         v_y_sum /= numActiveCopter;
+        centroid_x /= (numActiveCopter + 1);
+        centroid_y /= (numActiveCopter + 1);
 
         #ifdef THREE_D_MODE
+            centroid_z /= (numActiveCopter + 1);
             v_z_sum /= numActiveCopter;
         #endif
     }
+
+    // // // Add CLF tracking
+    // if (params->targetSet) {
+    //     vec3_t swarmalator_contribution = {v_x_sum, v_y_sum, 0.0f};
+    //     #ifdef THREE_D_MODE
+    //         swarmalator_contribution.z = v_z_sum;
+    //     #endif
+
+    //     vec3_t clf_contribution = calculate_clf_vector(
+    //         (vec3_t){params->targetX, params->targetY, params->targetZ},
+    //         swarmalator_contribution,
+    //         0.5f); // lambda
+
+    //     v_x_sum += clf_contribution.x;
+    //     v_y_sum += clf_contribution.y;
+    //     #ifdef THREE_D_MODE
+    //         v_z_sum += clf_contribution.z;
+    //     #endif
+    // }
 
     // Add repulsion from bounding planes
     float plane_v_x_sum = 0.0f;
@@ -196,18 +237,198 @@ void update_swarmalator(uint8_t my_id)
         phase += 2.0f * (float)M_PI;
     }
 
+    // The forward and lateral commands are from the drone's perspective, we need to convert to the global frame
+    float yaw = getYaw();
+
+    DEBUG_PRINT("Yaw = %f\n", (double)yaw);
+
+    float cosYaw = cosf(yaw);
+    float sinYaw = sinf(yaw);
+
+    float forwardCommand = params->forwardCommand / 100.0f; // convert from -255 - 255 to -2.55 - 2.55
+    float lateralCommand = params->lateralCommand / 100.0f; // convert from -255 - 255 to -2.55 - 2.55
+    
+    float x_command = cosYaw * forwardCommand - sinYaw * lateralCommand;
+    float y_command = sinYaw * forwardCommand + cosYaw * lateralCommand;
+
+    DEBUG_PRINT("Forward command = %f, lateralCommand = %f, x_command = %f, y_command = %f\n", (double)forwardCommand, (double)lateralCommand, (double)x_command, (double)y_command);
+
     // Update the desired position based on the velocity
-    desiredVx = v_x_sum;
-    desiredVy = v_y_sum;
+    desiredVx = v_x_sum + x_command;
+    desiredVy = v_y_sum + y_command;
+    desiredYaw = (params->yawCommand / 100.0f);
+    // desiredVx = v_x_sum;
+    // desiredVy = v_y_sum;
+    // desiredYaw = (params->yawCommand / 100.0f);
 
     #ifdef THREE_D_MODE
         desiredVz = v_z_sum;
+    #endif
+
+    // Compute the required rotation to align with hoop normal if needed
+    // vec3_t rot_vec = calculate_rot_vector(my_id, (vec3_t){0.0f, 1.0f, 0.0f});
+
+    // desiredVx += rot_vec.x;
+    // desiredVy += rot_vec.y;
+    // #ifdef THREE_D_MODE
+    //     desiredVz += rot_vec.z;
+    // #endif
+
+    // Clamp the velocities to the maximum
+    if (desiredVx > MAX_VELOCITY) desiredVx = MAX_VELOCITY;
+    if (desiredVx < -MAX_VELOCITY) desiredVx = -MAX_VELOCITY;
+    if (desiredVy > MAX_VELOCITY) desiredVy = MAX_VELOCITY;
+    if (desiredVy < -MAX_VELOCITY) desiredVy = -MAX_VELOCITY;
+
+    #ifdef THREE_D_MODE
+        if (desiredVz > MAX_VELOCITY) desiredVz = MAX_VELOCITY;
+        if (desiredVz < -MAX_VELOCITY) desiredVz = -MAX_VELOCITY;
     #endif
 
     duration = (T2M(xTaskGetTickCount()) - prevUpdate_ms) / 1000.0f;
 
     prevUpdate_ms = T2M(xTaskGetTickCount());
 }
+
+vec3_t calculate_rot_vector(int my_id, vec3_t hoop_normal) {
+
+    // --- 0. Gather positions ---
+    vec3_t positions[MAX_ADDRESS];
+    int count = 0;
+    vec3_t my_position = {getX(), getY(), getZ()}; // store self explicitly
+    positions[count++] = my_position;              // add self first
+
+    for (int i = 1; i < MAX_ADDRESS; i++) {        // start at 1, ID 0 is never active
+        if (peerLocalizationIsIDActive(i)) {
+            peerLocalizationOtherPosition_t *p = peerLocalizationGetPositionByID(i);
+            if (p != NULL) {
+                positions[count++] = (vec3_t){p->pos.x, p->pos.y, p->pos.z};
+            }
+        }
+    }
+
+    if (count < 2) return (vec3_t){0.0f, 0.0f, 0.0f};
+
+    // --- 1. Centroid ---
+    vec3_t centroid = {0,0,0};
+    for (int i = 0; i < count; i++) centroid = vec3_add(centroid, positions[i]);
+    centroid = vec3_scale(centroid, 1.0f / count);
+
+    // --- 2. Relative position ---
+    vec3_t r_i = vec3_sub(my_position, centroid);
+
+    // --- 3. Find long axis (furthest apart drones) ---
+    float max_dist = -1.0f;
+    vec3_t long_axis = {0.0f, 0.0f, 0.0f};
+
+    for (int i = 0; i < count; i++) {
+        for (int j = i + 1; j < count; j++) {
+            vec3_t diff = vec3_sub(positions[i], positions[j]);
+            float dist = vec3_norm(diff);
+            
+            if (dist > max_dist) {
+                max_dist = dist;
+                long_axis = diff;
+            }
+
+        }
+    }
+
+    long_axis = vec3_normalize(long_axis);
+
+    if (vec3_dot(long_axis, hoop_normal) < 0) long_axis = vec3_scale(long_axis, -1.0f); // ensure long axis points "up" the hoop normal
+
+    // --- 4. Rotation vector (align long_axis -> hoop_normal) ---
+    vec3_t b = vec3_normalize(hoop_normal);
+    vec3_t rot_vec = vec3_cross(long_axis, b);
+    float sin_angle = vec3_norm(rot_vec);
+    float cos_angle = fmaxf(fminf(vec3_dot(long_axis, b), 1.0f), -1.0f);
+
+    if (sin_angle < 1e-6f) return (vec3_t){0, 0, 0}; // already aligned
+
+    rot_vec = vec3_scale(rot_vec, 1.0f / sin_angle); // normalize axis
+    float angle = atan2f(sin_angle, cos_angle);
+    rot_vec = vec3_scale(rot_vec, angle); // full rotation vector
+
+    // --- 5. Clamp rotation per control step ---
+    const float MAX_ROT_PER_STEP = 0.15f; // radians per loop (tune for your controller)
+    float rot_norm = vec3_norm(rot_vec);
+    if (rot_norm > MAX_ROT_PER_STEP) {
+        rot_vec = vec3_scale(rot_vec, MAX_ROT_PER_STEP / rot_norm);
+        rot_norm = MAX_ROT_PER_STEP;
+    }
+
+    // --- 6. Rodrigues rotation ---
+    vec3_t n_hat = vec3_normalize(rot_vec);
+    float alpha = vec3_norm(rot_vec);
+    float c = cosf(alpha), s = sinf(alpha);
+    float dot = vec3_dot(n_hat, r_i);
+
+    vec3_t r_plus;
+    r_plus.x = r_i.x * c + (n_hat.y * r_i.z - n_hat.z * r_i.y) * s + n_hat.x * dot * (1 - c);
+    r_plus.y = r_i.y * c + (n_hat.z * r_i.x - n_hat.x * r_i.z) * s + n_hat.y * dot * (1 - c);
+    r_plus.z = r_i.z * c + (n_hat.x * r_i.y - n_hat.y * r_i.x) * s + n_hat.z * dot * (1 - c);
+
+    // --- 7. Rotational contribution ---
+    return vec3_sub(r_plus, r_i); // delta position (per loop)
+}
+
+vec3_t calculate_clf_vector(vec3_t target, vec3_t swarmalator_contribution, float lambda)
+{
+    // --- 0. Gather positions ---
+    vec3_t positions[MAX_ADDRESS];
+    int count = 0;
+
+    vec3_t my_position = {getX(), getY(), getZ()};
+    positions[count++] = my_position;
+
+    for (int i = 1; i < MAX_ADDRESS; i++) {
+        if (peerLocalizationIsIDActive(i)) {
+            peerLocalizationOtherPosition_t *p =
+                peerLocalizationGetPositionByID(i);
+            if (p != NULL) {
+                positions[count++] =
+                    (vec3_t){p->pos.x, p->pos.y, p->pos.z};
+            }
+        }
+    }
+
+    if (count < 1) return (vec3_t){0,0,0};
+
+    // --- 1. Centroid ---
+    vec3_t centroid = {0,0,0};
+    for (int i = 0; i < count; i++) {
+        centroid = vec3_add(centroid, positions[i]);
+    }
+    centroid = vec3_scale(centroid, 1.0f / (float)count);
+
+    // --- 2. Error vector e = x̄ − target ---
+    vec3_t error = vec3_sub(centroid, target);
+
+    // --- 3. V = ||e||^2 ---
+    float error_norm_sq = vec3_dot(error, error);
+    if (error_norm_sq < 1e-6f) {
+        return (vec3_t){0,0,0};  // already converged
+    }
+
+    float V = error_norm_sq;
+
+    // --- 4. LfV = (2/N) eᵀ f ---
+    float LfV =
+        (2.0f / (float)count) *
+        vec3_dot(error, swarmalator_contribution);
+
+    // --- 5. CLF control u ---
+    float gain =
+        -((float)count / 2.0f) *
+        (LfV + lambda * V) /
+        error_norm_sq;
+
+    vec3_t u = vec3_scale(error, gain);
+
+    return u;   // velocity contribution
+}
+
 
 float calculate_safe_J(int my_id, float J_target) {
     swarmalator_params_t* params = getSwarmalatorParams();
@@ -317,7 +538,7 @@ float calculate_safe_J(int my_id, float J_target) {
 #endif
                   ;
 
-    float rMin = 0.5f;
+    float rMin = 0.0f;
     float rMax = 1.0f;
 
     float b1 = norm2 - rMin*rMin;
@@ -362,6 +583,9 @@ float calculate_safe_J(int my_id, float J_target) {
     }
 
     float J_safe = fminf(fmaxf(J_target, u_min), u_max);
+
+    J_safe = fminf(fmaxf(J_safe, -1.0f), 1.0f); // hard limits
+
     return J_safe;
 }
 
@@ -391,4 +615,9 @@ float getDesiredVz()
 float getDuration()
 {
     return duration;
+}
+
+float getDesiredYaw()
+{
+    return desiredYaw;
 }

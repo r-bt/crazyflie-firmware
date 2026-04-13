@@ -115,6 +115,36 @@ class CrazyflieWidget(QGroupBox):
         self.nat_freq_spinbox.valueChanged.connect(self._on_parameter_changed)
         params_layout.addWidget(self.nat_freq_spinbox, 3, 1)
         
+        # Forward command parameter
+        params_layout.addWidget(QLabel("Forward:"), 4, 0)
+        self.forward_spinbox = QDoubleSpinBox()
+        self.forward_spinbox.setRange(-2.0, 2.0)
+        self.forward_spinbox.setSingleStep(0.1)
+        self.forward_spinbox.setValue(0.0)
+        self.forward_spinbox.setDecimals(2)
+        self.forward_spinbox.valueChanged.connect(self._on_parameter_changed)
+        params_layout.addWidget(self.forward_spinbox, 4, 1)
+        
+        # Lateral command parameter
+        params_layout.addWidget(QLabel("Lateral:"), 5, 0)
+        self.lateral_spinbox = QDoubleSpinBox()
+        self.lateral_spinbox.setRange(-2.0, 2.0)
+        self.lateral_spinbox.setSingleStep(0.1)
+        self.lateral_spinbox.setValue(0.0)
+        self.lateral_spinbox.setDecimals(2)
+        self.lateral_spinbox.valueChanged.connect(self._on_parameter_changed)
+        params_layout.addWidget(self.lateral_spinbox, 5, 1)
+        
+        # Yaw command parameter
+        params_layout.addWidget(QLabel("Yaw:"), 6, 0)
+        self.yaw_spinbox = QDoubleSpinBox()
+        self.yaw_spinbox.setRange(-180.0, 180.0)
+        self.yaw_spinbox.setSingleStep(5.0)
+        self.yaw_spinbox.setValue(0.0)
+        self.yaw_spinbox.setDecimals(1)
+        self.yaw_spinbox.valueChanged.connect(self._on_parameter_changed)
+        params_layout.addWidget(self.yaw_spinbox, 6, 1)
+        
         params_group.setLayout(params_layout)
         layout.addWidget(params_group)
         
@@ -198,7 +228,10 @@ class CrazyflieWidget(QGroupBox):
                 'K': self.k_spinbox.value(),
                 'J': self.j_spinbox.value(), 
                 'phase': self.phase_spinbox.value(),
-                'naturalFrequency': self.nat_freq_spinbox.value()
+                'naturalFrequency': self.nat_freq_spinbox.value(),
+                'forwardCommand': int(self.forward_spinbox.value() * 100),  # Scale to -255 to 255 range
+                'lateralCommand': int(self.lateral_spinbox.value() * 100),  # Scale to -255 to 255 range
+                'yawCommand': int(self.yaw_spinbox.value() * 100)  # Scale to -255 to 255 range
             }
             self.parameter_callback(self.drone_id, parameters)
     
@@ -208,7 +241,10 @@ class CrazyflieWidget(QGroupBox):
             'K': self.k_spinbox.value(),
             'J': self.j_spinbox.value(),
             'phase': self.phase_spinbox.value(),
-            'naturalFrequency': self.nat_freq_spinbox.value()
+            'naturalFrequency': self.nat_freq_spinbox.value(),
+            'forwardCommand': self.forward_spinbox.value(),
+            'lateralCommand': self.lateral_spinbox.value(),
+            'yawCommand': self.yaw_spinbox.value()
         }
     
     def set_parameters(self, params):
@@ -218,6 +254,9 @@ class CrazyflieWidget(QGroupBox):
         self.j_spinbox.valueChanged.disconnect()
         self.phase_spinbox.valueChanged.disconnect()
         self.nat_freq_spinbox.valueChanged.disconnect()
+        self.forward_spinbox.valueChanged.disconnect()
+        self.lateral_spinbox.valueChanged.disconnect()
+        self.yaw_spinbox.valueChanged.disconnect()
         
         # Set values
         if 'K' in params:
@@ -228,9 +267,18 @@ class CrazyflieWidget(QGroupBox):
             self.phase_spinbox.setValue(params['phase'])
         if 'naturalFrequency' in params:
             self.nat_freq_spinbox.setValue(params['naturalFrequency'])
+        if 'forwardCommand' in params:
+            self.forward_spinbox.setValue(params['forwardCommand'])
+        if 'lateralCommand' in params:
+            self.lateral_spinbox.setValue(params['lateralCommand'])
+        if 'yawCommand' in params:
+            self.yaw_spinbox.setValue(params['yawCommand'])
         
         # Reconnect signals
         self.k_spinbox.valueChanged.connect(self._on_parameter_changed)
         self.j_spinbox.valueChanged.connect(self._on_parameter_changed)
         self.phase_spinbox.valueChanged.connect(self._on_parameter_changed)
         self.nat_freq_spinbox.valueChanged.connect(self._on_parameter_changed)
+        self.forward_spinbox.valueChanged.connect(self._on_parameter_changed)
+        self.lateral_spinbox.valueChanged.connect(self._on_parameter_changed)
+        self.yaw_spinbox.valueChanged.connect(self._on_parameter_changed)

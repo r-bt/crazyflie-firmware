@@ -46,4 +46,8 @@ typedef struct {
     float targetY;
     float targetZ;
     float alpha;
+
+    int16_t forwardCommand; // -255 - 255, but in the control code we will interpret as / 100
+    int16_t lateralCommand;
+    int16_t yawCommand;
 } swarmalator_params_t;

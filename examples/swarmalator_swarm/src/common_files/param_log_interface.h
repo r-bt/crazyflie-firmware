@@ -14,6 +14,13 @@
 #include "pm.h"
 
 /**
+ * Get the yaw of the Crazyflie
+ * 
+ * @return The yaw of the Crazyflie in radians
+ */
+float getYaw();
+
+/**
  * Get the x position of the Crazyflie
  *
  * @return The x position of the Crazyflie

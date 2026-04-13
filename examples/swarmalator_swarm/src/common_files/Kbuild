@@ -5,3 +5,4 @@ obj-y += param_log_interface.o
 obj-y += movement.o
 obj-y += led_ring.o
 obj-y += swarmalator.o
+obj-y += vec.o

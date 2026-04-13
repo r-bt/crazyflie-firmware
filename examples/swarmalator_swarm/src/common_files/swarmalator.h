@@ -11,6 +11,7 @@
 
 #include "p2p_interface.h"
 #include "common.h"
+#include "vec.h"
 
 typedef struct {
     point_t point;
@@ -73,3 +74,9 @@ float getPhase();
 float getJ1Value(int my_id, float xPos, float yPos, float zPos);
 
 float calculate_safe_J(int my_id, float J_target);
+
+vec3_t calculate_rot_vector(int my_id, vec3_t hoop_normal);
+
+vec3_t calculate_clf_vector(vec3_t target, vec3_t swarmalator_contribution, float lambda);
+
+float getDesiredYaw();

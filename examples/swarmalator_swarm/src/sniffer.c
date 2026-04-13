@@ -24,6 +24,9 @@ static float As[MAX_ADDRESS];
 static float Bs[MAX_ADDRESS];
 static float naturalFrequencies[MAX_ADDRESS];
 static float startingPhases[MAX_ADDRESS];
+static int16_t forwardCommands[MAX_ADDRESS];
+static int16_t lateralCommands[MAX_ADDRESS];
+static int16_t yawCommands[MAX_ADDRESS];
 static uint32_t swarmalatorParamsVersions[MAX_ADDRESS];
 
 static uint8_t isTargetSet = 0;
@@ -71,6 +74,9 @@ static void broadcastData(xTimerHandle timer)
             swarmalatorParams.targetY = targetY;
             swarmalatorParams.targetZ = targetZ;
             swarmalatorParams.alpha = alpha;
+            swarmalatorParams.forwardCommand = forwardCommands[i];
+            swarmalatorParams.lateralCommand = lateralCommands[i];
+            swarmalatorParams.yawCommand = yawCommands[i];
 
             broadcastSwarmalatorParams(i, swarmalatorParamsVersions[i], &swarmalatorParams);
 
@@ -107,6 +113,9 @@ void appMain()
         naturalFrequencies[i] = 0.0f;
         startingPhases[i] = 0.0f;
         swarmalatorParamsVersions[i] = 0;
+        forwardCommands[i] = 0;
+        lateralCommands[i] = 0;
+        yawCommands[i] = 0;
     }
 
     initP2P();
@@ -139,7 +148,10 @@ void updateAllSwarmalatorParams()
     PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_A, &As[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
     PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_B, &Bs[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
     PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_naturalFrequency, &naturalFrequencies[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
-    PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_phase, &startingPhases[AGENT_ID], swarmalatorParamsCB_##AGENT_ID)
+    PARAM_ADD_WITH_CALLBACK(PARAM_FLOAT, AGENT_ID##_phase, &startingPhases[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
+    PARAM_ADD_WITH_CALLBACK(PARAM_INT16, AGENT_ID##_forwardCommand, &forwardCommands[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
+    PARAM_ADD_WITH_CALLBACK(PARAM_INT16, AGENT_ID##_lateralCommand, &lateralCommands[AGENT_ID], swarmalatorParamsCB_##AGENT_ID) \
+    PARAM_ADD_WITH_CALLBACK(PARAM_INT16, AGENT_ID##_yawCommand, &yawCommands[AGENT_ID], swarmalatorParamsCB_##AGENT_ID)
 
 DEFINE_SWARMALATOR_CB(1)
 DEFINE_SWARMALATOR_CB(2)

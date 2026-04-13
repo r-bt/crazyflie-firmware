@@ -48,6 +48,8 @@ class SwarmControlTower(QMainWindow):
         self.signals.drone_updated.connect(self.update_drone_display)
         self.signals.error_occurred.connect(self.show_error)
         self.signals.led_update.connect(self.update_drone_led)
+        self.signals.external_params.connect(self._handle_external_params)
+        self.signals.close_app.connect(self.close)
         
         # Initialize experiment recorder
         self.recorder = ExperimentRecorder()
@@ -99,6 +101,12 @@ class SwarmControlTower(QMainWindow):
         self.report_socket = self.context.socket(zmq.PULL)
         self.report_socket.connect("tcp://127.0.0.1:5555")
         self.report_socket.setsockopt(zmq.RCVTIMEO, 1000)
+        
+        # External parameter input socket (other programs push commands here)
+        self.external_param_socket = self.context.socket(zmq.PULL)
+        self.external_param_socket.bind("tcp://*:5558")
+        self.external_param_socket.setsockopt(zmq.RCVTIMEO, 100)
+        print("External parameter socket listening on tcp://*:5558")
         
         self.command_socket = self.context.socket(zmq.PUSH)
         try:
@@ -235,8 +243,12 @@ class SwarmControlTower(QMainWindow):
         phase_layout.addWidget(QLabel("Phase Setup:"))
         
         linear_phase_btn = QPushButton("Linear Spacing")
-        linear_phase_btn.clicked.connect(self.set_linear_phases)
+        linear_phase_btn.clicked.connect(lambda: self.set_linear_phases(2.0 * math.pi))
         phase_layout.addWidget(linear_phase_btn)
+
+        half_linear_phase_btn = QPushButton("Half Linear Spacing")
+        half_linear_phase_btn.clicked.connect(lambda: self.set_linear_phases(math.pi))
+        phase_layout.addWidget(half_linear_phase_btn)
         
         quickset_layout.addLayout(phase_layout)
         
@@ -330,7 +342,7 @@ class SwarmControlTower(QMainWindow):
         target_layout.addWidget(self.alpha_spinbox)
 
         quickset_layout.addLayout(target_layout)
-        
+
         # Drawing path control
         drawing_layout = QHBoxLayout()
         
@@ -424,6 +436,10 @@ class SwarmControlTower(QMainWindow):
         # Start data receiving thread
         self.receive_thread = threading.Thread(target=self._receive_data, daemon=True)
         self.receive_thread.start()
+        
+        # Start external parameter listener thread
+        self.external_param_thread = threading.Thread(target=self._receive_external_params, daemon=True)
+        self.external_param_thread.start()
         
     def _receive_data(self):
         """Background thread for receiving ZMQ data - runs independently from GUI"""
@@ -722,7 +738,66 @@ class SwarmControlTower(QMainWindow):
         except Exception as e:
             print(f"Error sending parameters to drone {drone_id}: {e}")
     
-    def set_linear_phases(self):
+    def _receive_external_params(self):
+        """Background thread listening for external parameter commands on port 5558.
+        
+        Expected JSON format:
+            {
+                "droneId": 8,
+                "forward": 0.5,
+                "lateral": -0.3,
+                "yaw": 45.0
+            }
+        All parameter fields are optional; only those present will be updated.
+        """
+        while True:
+            try:
+                msg = self.external_param_socket.recv_json()
+                drone_id = msg.get("droneId")
+                if drone_id is None:
+                    print("External param message missing 'droneId', ignoring")
+                    continue
+                
+                params = {}
+                if "forward" in msg:
+                    params["forwardCommand"] = float(msg["forward"])
+                if "lateral" in msg:
+                    params["lateralCommand"] = float(msg["lateral"])
+                if "yaw" in msg:
+                    params["yawCommand"] = float(msg["yaw"])
+                
+                if params:
+                    # Emit signal so the GUI updates on the main thread
+                    self.signals.external_params.emit(drone_id, params)
+            except zmq.error.Again:
+                # Timeout — no message, just loop
+                continue
+            except Exception as e:
+                print(f"Error in external param listener: {e}")
+                self.signals.close_app.emit()
+                return
+    
+    def _handle_external_params(self, drone_id: int, params: dict):
+        """Handle external parameter updates on the main/GUI thread"""
+        if 1 <= drone_id <= MAX_COPTERS:
+            widget = self.drone_widgets[drone_id - 1]
+            widget.set_parameters(params)
+            # Build the scaled parameter dict matching _on_parameter_changed format
+            raw = widget.get_parameters()
+            scaled_params = {
+                'K': raw['K'],
+                'J': raw['J'],
+                'phase': raw['phase'],
+                'naturalFrequency': raw['naturalFrequency'],
+                'forwardCommand': int(raw['forwardCommand'] * 100),
+                'lateralCommand': int(raw['lateralCommand'] * 100),
+                'yawCommand': int(raw['yawCommand'] * 100),
+            }
+            self.send_parameters_to_drone(drone_id, scaled_params)
+        else:
+            print(f"External param update for unknown drone {drone_id}")
+    
+    def set_linear_phases(self, max_phase: float = 2.0 * math.pi):
         """Set phases linearly spaced across all active drones"""
         active_drones = [(i, w) for i, w in enumerate(self.drone_widgets) if w.is_active]
 
@@ -736,7 +811,7 @@ class SwarmControlTower(QMainWindow):
         if num == 1:
             phase_values = [0.0]
         else:
-            phase_values = [(2.0 * math.pi * i) / (num) for i in range(num)]
+            phase_values = [(max_phase * i) / (num) for i in range(num)]
 
         for (phase, (_, widget)) in zip(phase_values, active_drones):
             params = {'phase': phase}
@@ -1079,6 +1154,7 @@ class SwarmControlTower(QMainWindow):
         # Close ZMQ sockets
         self.report_socket.close()
         self.command_socket.close()
+        self.external_param_socket.close()
         self.context.term()
         
         event.accept()

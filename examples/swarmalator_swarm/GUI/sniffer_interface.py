@@ -257,6 +257,16 @@ class SnifferInterface:
             self.cf.param.set_value("app.{}_phase".format(agentId), params['phase'])
         if 'naturalFrequency' in params:
             self.cf.param.set_value("app.{}_naturalFrequency".format(agentId), params['naturalFrequency'])
+        if 'forwardCommand' in params:
+            print("Updating forwardCommand for drone {}: {}".format(agentId, params['forwardCommand']))
+            self.cf.param.set_value("app.{}_forwardCommand".format(agentId), params['forwardCommand'])
+        if 'lateralCommand' in params:
+            print("Updating lateralCommand for drone {}: {}".format(agentId, params['lateralCommand']))
+            self.cf.param.set_value("app.{}_lateralCommand".format(agentId), params['lateralCommand'])
+        if 'yawCommand' in params:
+            print("Updating yawCommand for drone {}: {}".format(agentId, params['yawCommand']))
+            self.cf.param.set_value("app.{}_yawCommand".format(agentId), params['yawCommand'])
+        
 
 
 class snifferThread(threading.Thread):

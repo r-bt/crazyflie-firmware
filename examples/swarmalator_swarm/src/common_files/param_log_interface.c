@@ -1,4 +1,5 @@
 #include "param_log_interface.h"
+#include "math.h"
 
 static logVarId_t logIdVBat;
 static logVarId_t logIdStateEstimateX;
@@ -7,12 +8,18 @@ static logVarId_t logIdStateEstimateZ;
 static logVarId_t logIdStateEstimateVx;
 static logVarId_t logIdStateEstimateVy;
 static logVarId_t logIdStateEstimateVz;
+static logVarId_t logIdStateEstimateYaw;
 static logVarId_t logIdPmState;
 static logVarId_t logIdKalmanVarPX;
 static logVarId_t logIdKalmanVarPY;
 static logVarId_t logIdKalmanVarPZ;
 static logVarId_t logIdlighthouseEstBs0Rt;
 static logVarId_t logIdlighthouseEstBs1Rt;
+
+float getYaw() {
+    float yawDegrees = logGetFloat(logIdStateEstimateYaw);
+    return yawDegrees * (float)M_PI / 180.0f; // Convert to radians
+}
 
 float getX()
 {
@@ -77,6 +84,7 @@ bool isLighthouseAvailable(void)
 void initParamLogInterface()
 {
     logIdVBat = logGetVarId("pm", "vbat");
+    logIdStateEstimateYaw = logGetVarId("stateEstimate", "yaw");
     logIdStateEstimateX = logGetVarId("stateEstimate", "x");
     logIdStateEstimateY = logGetVarId("stateEstimate", "y");
     logIdStateEstimateZ = logGetVarId("stateEstimate", "z");

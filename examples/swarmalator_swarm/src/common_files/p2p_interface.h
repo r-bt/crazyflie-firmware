@@ -26,14 +26,14 @@ typedef struct {
     // Higher level control
     uint32_t controlDataVersion;
     uint8_t isControlDataValid;
-    uint32_t magicNumber;
+    uint8_t magicNumber;
 
     // Control parameters
     uint8_t isRunning; // 0 = experiment not running, 1 = experiment running
 } copter_message_t;
 
 typedef struct {
-    uint32_t magicNumber;
+    uint8_t magicNumber;
     uint8_t id;
     uint32_t swarmalatorParamsVersion;
     swarmalator_params_t swarmalatorParams;
@@ -90,6 +90,8 @@ void initPeerStates(void);
  * @return True if the experiment is running, false otherwise
  */
 bool isExperimentRunning(void);
+
+void resetControlDataVersion(void);
 
 /**
  * Set the experiment running state

@@ -12,3 +12,5 @@ class DataUpdateSignals(QObject):
     drone_updated = pyqtSignal(int, dict)  # drone_id, data
     error_occurred = pyqtSignal(str, str)  # title, message
     led_update = pyqtSignal(int, str)  # drone_id, color
+    external_params = pyqtSignal(int, dict)  # drone_id, parameters
+    close_app = pyqtSignal()  # request GUI shutdown

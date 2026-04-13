@@ -53,11 +53,11 @@ static bool isInFlightArea = true;
 
 // Boundary planes to prevent agents from existing the flight area (i.e. the area that the lighthouse can track them in)
 static plane_t boundaryPlanes[] = {
-    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1}, .doesRepulse = false },
-    { .point = {.x = 0, .y = 0, .z = 1.9}, .normal = {.x = 0, .y = 0, .z = -1}, .doesRepulse = false },
-    { .point = {.x = 1.7, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0}, .doesRepulse = false },
-    { .point = {.x = -1.7, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0}, .doesRepulse = false },
-    { .point = {.x = 0, .y = 2.1, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0}, .doesRepulse = false },
+    { .point = {.x = 0, .y = 0, .z = 0}, .normal = {.x = 0, .y = 0, .z = 1}, .doesRepulse = true },
+    { .point = {.x = 0, .y = 0, .z = 1.9}, .normal = {.x = 0, .y = 0, .z = -1}, .doesRepulse = true },
+    { .point = {.x = 1.8, .y = 0, .z = 0}, .normal = {.x = -1, .y = 0, .z = 0}, .doesRepulse = false },
+    { .point = {.x = -2.0, .y = 0, .z = 0}, .normal = {.x = 1, .y = 0, .z = 0}, .doesRepulse = false },
+    { .point = {.x = 0, .y = 4.0, .z = 0}, .normal = {.x = 0, .y = -1, .z = 0}, .doesRepulse = false },
     { .point = {.x = 0, .y = -2.1, .z = 0}, .normal = {.x = 0, .y = 1, .z = 0}, .doesRepulse = false }
 };
 int numBoundaryPlanes = sizeof(boundaryPlanes) / sizeof(boundaryPlanes[0]);
@@ -225,9 +225,9 @@ static void stateTransition(xTimerHandle timer)
             // DEBUG_PRINT("Going to (%f, %f) in %f seconds\n", (double)getDesiredVx(), (double)getDesiredVy(), (double)getDuration());
             // crtpCommanderHighLevelGoTo2(getDesiredDeltaX(), getDesiredDeltaY(), 0, 0.0f, 0.1f, true, false);
             #ifdef THREE_D_MODE
-                setVelocitySetpoint3D(&setpoint, getDesiredVx(), getDesiredVy(), getDesiredVz(), 0);
+                setVelocitySetpoint3D(&setpoint, getDesiredVx(), getDesiredVy(), getDesiredVz(), getDesiredYaw());
             #else
-                setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), TAKE_OFF_HEIGHT, 0);
+                setVelocitySetpoint2D(&setpoint, getDesiredVx(), getDesiredVy(), TAKE_OFF_HEIGHT, getDesiredYaw());
             #endif
             commanderSetSetpoint(&setpoint, 3);
 
@@ -273,7 +273,7 @@ static void stateTransition(xTimerHandle timer)
             }
 
             DEBUG_PRINT("Landing...\n");
-            crtpCommanderHighLevelLand(padZ, LANDING_DURATION);
+            // crtpCommanderHighLevelLand(padZ, LANDING_DURATION);
             state = STATE_LANDING;
         }
         break;
@@ -283,6 +283,7 @@ static void stateTransition(xTimerHandle timer)
             crtpCommanderHighLevelStop();
             if (supervisorRequestArming(false)) {
                 initSwarmalator(my_id, boundaryPlanes, numBoundaryPlanes); // reset swarmalator
+                resetControlDataVersion();
                 state = STATE_WAIT_FOR_TAKE_OFF;
             }
         }

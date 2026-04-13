@@ -9,7 +9,7 @@
 #define DEBUG_MODULE "P2P_INTERFACE"
 #include "debug.h"
 
-#define THE_MAGIC_NUMBER 0x12345678
+#define THE_MAGIC_NUMBER 0x012
 #define P2P_PORT 5 // Crazyflie allows PORT to be specified to differentiate between different types of packets
 #define SWARMALATOR_PARAMS_PORT 6
 
@@ -28,7 +28,10 @@ swarmalator_params_t swarmalatorParams = {
     .targetX = 0.0f,
     .targetY = 0.0f,
     .targetZ = 0.0f,
-    .alpha = 1.0f
+    .alpha = 1.0f,
+    .forwardCommand = 0,
+    .lateralCommand = 0,
+    .yawCommand = 0,
 };
 
 // Swarmalator control parameters
@@ -51,7 +54,7 @@ static void p2pHandleCopterMessage(P2PPacket* p)
 
     // Check if the magic number is correct
     if (rxMessage.magicNumber != THE_MAGIC_NUMBER) {
-        DEBUG_PRINT("Wrong magic number %lu from %u\n", rxMessage.magicNumber, rxMessage.fullState.id);
+        DEBUG_PRINT("Wrong magic number %d from %u\n", rxMessage.magicNumber, rxMessage.fullState.id);
         return;
     }
 
@@ -101,7 +104,7 @@ static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
 
     // Check if the magic number is correct
     if (rxMessage.magicNumber != THE_MAGIC_NUMBER) {
-        DEBUG_PRINT("Wrong magic number %lu from %u\n", rxMessage.magicNumber, rxMessage.id);
+        DEBUG_PRINT("Wrong magic number %d from %u\n", rxMessage.magicNumber, rxMessage.id);
         return;
     }
 
@@ -122,7 +125,7 @@ static void p2pHandleSwarmalatorParamsMessage(P2PPacket* p)
     memcpy(&swarmalatorParams, &rxMessage.swarmalatorParams, sizeof(swarmalator_params_t));
 
     DEBUG_PRINT("Received new swarmalator params version %lu\n", rxMessage.swarmalatorParamsVersion);
-    DEBUG_PRINT("Target set: %u, Target: (%.2f, %.2f, %.2f), alpha: %.2f\n", swarmalatorParams.targetSet, (double)swarmalatorParams.targetX, (double)swarmalatorParams.targetY, (double)swarmalatorParams.targetZ, (double)swarmalatorParams.alpha);
+    DEBUG_PRINT("Forward Command: %f, Lateral Command: %f, Yaw Command: %f", (double)(swarmalatorParams.forwardCommand / 100.0f), (double)(swarmalatorParams.lateralCommand / 100.0f), (double)(swarmalatorParams.yawCommand / 100.0f));
 
     // Update the swarmalator params version
     swarmalatorParamsVersion = rxMessage.swarmalatorParamsVersion;
@@ -266,6 +269,10 @@ uint32_t getSwarmalatorsParamsVersion(void) {
 
 swarmalator_params_t* getSwarmalatorParams(void) {
     return &swarmalatorParams;
+}
+
+void resetControlDataVersion(void) {
+    controlDataVersion = 0;
 }
 
 /**
